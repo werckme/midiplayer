@@ -5,6 +5,7 @@ import { InstrumentSamples } from "./InstrumentSamples";
 
 const instrumentSampleMap = new Map<string, InstrumentSamples>();
 
+
 export class Instrument {
     private notes = new Map<string, AudioBufferSourceNode>();
     public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
