@@ -1,60 +1,32 @@
-const samplesBaseUrl = 'https://werckme.github.io/midi-js-soundfonts/FluidR3_GM';
-import { Base64Binary } from "./Base64binary";
+import { InstrumentNames } from "./GM";
 import { IMidiEvent } from "./IMidiEvent";
+import { InstrumentSamples } from "./InstrumentSamples";
 
-let GlobalMIDIExists = false;
-declare const MIDI; // loaded soundfonts are stored here
+
+const instrumentSampleMap = new Map<string, InstrumentSamples>();
 
 export class Instrument {
-    sampleCache = new Map<string, AudioBuffer>();
 
-    constructor(private name: string, private audioContext: AudioContext) {
-
+    public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
+        if(instrumentSampleMap.has(instrumentName)) {
+            return;
+        }
+        const samples = new InstrumentSamples(instrumentName, audioContext);
+        await samples.load();
+        instrumentSampleMap.set(instrumentName, samples);
     }
 
-    async load() {
-        if (!GlobalMIDIExists || !MIDI.Soundfont[this.name]) {
-            const url = `${samplesBaseUrl}/${this.name}-ogg.js`;
-            const response = await fetch(url);
-            const text = await response.text();
-            const script:any = document.createElement('script');
-            script.language = 'javascript';
-            script.type = 'text/javascript';
-            script.text = text;
-            document.body.appendChild(script);
-            GlobalMIDIExists = true;
-        }
-        await this.fillSampleCache();
-    }
-
-
-    async fillSampleCache() {
-        const noteNames = Object.keys(MIDI.Soundfont[this.name]);
-        for(const noteName of noteNames) {
-            await this.initNoteBuffer(noteName);
-        }
-    }
-
-    async initNoteBuffer(noteName: string): Promise<AudioBuffer> {
-        if (!this.sampleCache.has(noteName)) {
-            const note = MIDI.Soundfont[this.name][noteName];
-            if (!note) {
-                throw new Error(`note "${noteName}" not found`);
-            }
-            const base64 = note.split(',')[1];
-            const buffer = Base64Binary.decodeArrayBuffer(base64);
-            const audioBuffer = await this.audioContext.decodeAudioData(buffer);
-            this.sampleCache.set(noteName, audioBuffer);
-        }
-        return this.sampleCache.get(noteName);
+    constructor(private instrumentName: string, private audioContext: AudioContext) {
     }
 
     noteOn(event: IMidiEvent) {
-        if (!this.sampleCache.has(event.noteName)) {
+        const samples = instrumentSampleMap.get(this.instrumentName);
+        const buffer = samples.getNoteSample(event.noteName);
+        if (!buffer) {
             return;
         }
         const node = new AudioBufferSourceNode(this.audioContext);
-        node.buffer = this.sampleCache.get(event.noteName);
+        node.buffer = buffer;
         node.connect(this.audioContext.destination)
         node.start()
     }

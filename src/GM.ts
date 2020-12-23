@@ -128,3 +128,7 @@ export const InstrumentNames = [
     "applause",
     "gunshot"
   ]
+
+  export function GetInstrumentNameForPc(pcNumber: number) {
+    return InstrumentNames[pcNumber];
+  }
