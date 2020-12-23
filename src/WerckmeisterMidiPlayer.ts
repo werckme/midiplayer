@@ -80,6 +80,10 @@ export class WerckmeisterMidiPlayer {
         await this.preprocessEvents(this.midiPlayer.getEvents());
     }
 
+    overrideTempo(bpm: number) {
+        this.midiPlayer.tempo = bpm;
+    }
+
     play() {
         if (!this.midiPlayer) {
             return;
