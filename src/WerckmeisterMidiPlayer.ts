@@ -3,24 +3,21 @@ import * as _ from 'lodash';
 import { Instrument } from "./Instrument";
 import { IMidiEvent, MidiEventNames } from "./IMidiEvent";
 import { GetInstrumentNameForPc } from "./GM";
-import { ipanema } from "./testmidi";
 
-
-const midifile = ipanema;
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 10;
 
 export class WerckmeisterMidiPlayer {
+    midiPlayer: MidiPlayer.Player;
     audioContext: AudioContext;
     instruments = new Map<number, Instrument>();
     percussion: Instrument|null;
-    public async init(): Promise<void> {
-        try {
-            this.audioContext = new AudioContext();
-            this.play();
-        } catch (ex) {
-            console.log(ex)
+    
+    public initAudioEnvironment(event: Event) {
+        if (this.audioContext) {
+            return;
         }
+        this.audioContext = new AudioContext();
     }
 
 
@@ -68,17 +65,43 @@ export class WerckmeisterMidiPlayer {
         this.instruments.set(event.track, instrument);
     }
 
-    async play() {
-        const midiPlayer = new MidiPlayer.Player();
-        midiPlayer.on('midiEvent', (event: IMidiEvent) => {
+    async load(base64Data: string) {
+        this.midiPlayer = new MidiPlayer.Player();
+        this.midiPlayer.on('midiEvent', (event: IMidiEvent) => {
             switch(event.name) {
                 case MidiEventNames.NoteOn: return this.noteOn(event);
                 case MidiEventNames.NoteOff: return this.noteOff(event);
                 case MidiEventNames.Pc: return this.ProgramChange(event);
             }
         });
-        midiPlayer.loadDataUri(midifile);
-        await this.preprocessEvents(midiPlayer.getEvents());
-        midiPlayer.play();
+        this.midiPlayer.loadDataUri(base64Data);
+        (this.midiPlayer as any).sampleRate = 0;
+        console.log(this.midiPlayer.getEvents())
+        await this.preprocessEvents(this.midiPlayer.getEvents());
     }
+
+    play() {
+        if (!this.midiPlayer) {
+            return;
+        }        
+        this.midiPlayer.play();
+    }
+
+    stop() {
+        if (!this.midiPlayer) {
+            return;
+        }
+        this.midiPlayer.stop();
+        for(const instrument of Array.from(this.instruments.values())) {
+            instrument.stop();
+        }
+    }
+
+    pause() {
+        if (!this.midiPlayer) {
+            return;
+        }
+        this.midiPlayer.pause();
+    }
+
 }

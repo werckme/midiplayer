@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc"
+    "deploy": "rm -rf dist && npm run build && cp package.json dist",
+    "build": "parcel build --no-source-maps src/WerckmeisterMidiPlayer.ts"
   },
   "repository": {
     "type": "git",
