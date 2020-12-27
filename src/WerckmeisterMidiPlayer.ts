@@ -3,10 +3,10 @@ import * as _ from 'lodash';
 import { Instrument, SampleRate } from "./Instrument";
 import { IMidiEvent, MidiEventNames } from "./IMidiEvent";
 import { GetInstrumentNameForPc } from "./GM";
-import { off } from "process";
 
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 10;
+const RenderSecsPerCycle = 5;
 
 export class WerckmeisterMidiPlayer {
     midiPlayer: MidiPlayer.Player;
@@ -14,10 +14,6 @@ export class WerckmeisterMidiPlayer {
     instruments = new Map<number, Instrument>();
     percussion: Instrument|null;
     events: IMidiEvent[];
-    lastEventIndex: 0;
-    intervalId: any;
-    startTime: number|null;
-    lastEventTSeconds: number;
     audioBuffer: AudioBuffer;
     playblackNode: AudioBufferSourceNode;
 
@@ -50,7 +46,6 @@ export class WerckmeisterMidiPlayer {
         }
         this.events = _.chain(events)
             .flatten()
-            .orderBy(x => x.tick)
             .value();
     }
 
@@ -88,32 +83,28 @@ export class WerckmeisterMidiPlayer {
     }
 
 
-    onRender() {
-        if (this.startTime === null) {
-            this.startTime = performance.now();
-        }
-        while(this.lastEventIndex < this.events.length) {
-            const event = this.events[this.lastEventIndex];
-            let eventTseconds = (event.tick / this.midiPlayer.division) * (60 / this.midiPlayer.tempo);
-            switch(event.name) {
-                case MidiEventNames.NoteOn: this.noteOn(event, eventTseconds); break;
-                case MidiEventNames.NoteOff: this.noteOff(event, eventTseconds); break;
-                case MidiEventNames.Pc: this.programChange(event); break;
+    render(): Promise<void> {
+        return new Promise(resolve => {
+            for(let i=0; i<this.events.length; ++i) {
+                const event = this.events[i];
+                let eventTseconds = (event.tick / this.midiPlayer.division) * (60 / this.midiPlayer.tempo);
+                switch(event.name) {
+                    case MidiEventNames.NoteOn: this.noteOn(event, eventTseconds); break;
+                    case MidiEventNames.NoteOff: this.noteOff(event, eventTseconds); break;
+                    case MidiEventNames.Pc: this.programChange(event); break;
+                }
             }
-            ++this.lastEventIndex;
-        }
+            resolve();
+        });
     }
 
-    play() {
+    async play() {
         if (!this.midiPlayer) {
             return;
         }
-        this.startTime = null;
-        this.lastEventIndex = 0;
-        this.lastEventTSeconds = 0;
         const songTimeSecs = this.midiPlayer.getSongTime() + 5;
         this.audioBuffer = new AudioBuffer({length: songTimeSecs*SampleRate, sampleRate: SampleRate})
-        this.onRender();
+        await this.render();
         this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
         this.playblackNode.connect(this.audioContext.destination);
         this.playblackNode.start();

@@ -5,7 +5,7 @@ import { InstrumentSamples } from "./InstrumentSamples";
 
 const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SampleRate = 44100;
-const FadeOutSamples = 100;
+const FadeOutSamples = 500;
 
 class Note {
     constructor(public startTimeSecs: number, public velocity: number) {}
