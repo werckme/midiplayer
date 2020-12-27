@@ -42,7 +42,8 @@ export class Instrument {
         const samples = InstrumentSampleMap.get(this.instrumentName);
         const buffer = samples.getNoteSample(event.noteName);
         const startTimeSecs = note.startTimeSecs;
-        const volume = note.velocity / 127;
+        // exp((x-1)*3)
+        const volume = Math.exp(((note.velocity/127)-1)*3) + 0.2;
         if (!buffer) {
             return;
         }
