@@ -3,8 +3,9 @@ import { IMidiEvent } from "./IMidiEvent";
 import { InstrumentSamples } from "./InstrumentSamples";
 
 
-const instrumentSampleMap = new Map<string, InstrumentSamples>();
+const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SampleRate = 44100;
+const FadeOutSamples = 100;
 
 class Note {
     constructor(public startTimeSecs: number, public velocity: number) {}
@@ -13,18 +14,22 @@ class Note {
 export class Instrument {
     private notes = new Map<string, Note>();
     public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
-        if(instrumentSampleMap.has(instrumentName)) {
+        if(InstrumentSampleMap.has(instrumentName)) {
             return;
         }
         const samples = new InstrumentSamples(instrumentName, audioContext);
         await samples.load();
-        instrumentSampleMap.set(instrumentName, samples);
+        InstrumentSampleMap.set(instrumentName, samples);
     }
 
     constructor(private instrumentName: string, private audioContext: AudioContext) {
     }
 
-
+    /**
+     * the event will be stored to be rendered during the associated noteOff event
+     * @param event 
+     * @param offset 
+     */
     noteOn(event: IMidiEvent, offset: number = 0) {
         this.notes.set(event.noteName, new Note(offset, event.velocity));
     }
@@ -34,19 +39,28 @@ export class Instrument {
         if (!note) {
             return;
         }
-        const samples = instrumentSampleMap.get(this.instrumentName);
+        const samples = InstrumentSampleMap.get(this.instrumentName);
         const buffer = samples.getNoteSample(event.noteName);
         const startTimeSecs = note.startTimeSecs;
-        const numSamples = (offset - startTimeSecs) * SampleRate;
         const volume = note.velocity / 127;
         if (!buffer) {
             return;
         }
+        const numSamples = (offset - startTimeSecs) * SampleRate;
+        const fadeOutSamples = Math.min(numSamples, FadeOutSamples);
         const sData = buffer.getChannelData(0);
         const tData = target.getChannelData(0);
         let tIndex = Math.floor(startTimeSecs * SampleRate);
+        const fadeOutIndex = numSamples - fadeOutSamples;
         for(let i=0; i<sData.length; ++i) {
-            tData[tIndex++] += i<numSamples ? sData[i] * volume : 0;
+            let fadeOut = 1;
+            if (i >= fadeOutIndex) {
+                fadeOut = 1 - (1/fadeOutSamples) * (i-fadeOutIndex);
+                if (fadeOut <= 0) {
+                    break;
+                }
+            }
+            tData[tIndex++] += sData[i] * volume * fadeOut;
         }
     }
 
