@@ -1,5 +1,5 @@
 import {WerckmeisterMidiPlayer} from './src/WerckmeisterMidiPlayer';
-import {ipanema, c9, mario, blackpages} from './testmidi';
+import {ipanema, c9, mario, blackpages, ennios} from './testmidi';
 
 const werckmeisterMidiPlayer = new WerckmeisterMidiPlayer();
 
@@ -14,7 +14,7 @@ function log(str:string) {
 los.onclick = async (ev: Event) => {
     log("play pressed")
     werckmeisterMidiPlayer.initAudioEnvironment(ev);
-    await werckmeisterMidiPlayer.load(ipanema);
+    await werckmeisterMidiPlayer.load(ennios);
     werckmeisterMidiPlayer.overrideTempo(140)
     log("loaded")
     const t = performance.now();

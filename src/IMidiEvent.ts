@@ -2,6 +2,8 @@ export const MidiEventNames = {
     NoteOn: "Note on",
     NoteOff: "Note off",
     Pc: "Program Change",
+    Cc: "Controller Change",
+    PitchBend: "Pitch Bend"
 }
 
 export interface IMidiEvent {
@@ -14,4 +16,5 @@ export interface IMidiEvent {
     track: number;
     value: number;
     velocity: number;
+    number: number;
 }

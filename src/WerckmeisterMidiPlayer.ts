@@ -1,4 +1,4 @@
-import * as MidiPlayer from "midi-player-js";
+import { MidiPlayer } from "./midiplayer";
 import * as _ from 'lodash';
 import { Instrument, SampleRate } from "./Instrument";
 import { IMidiEvent, MidiEventNames } from "./IMidiEvent";
@@ -9,7 +9,7 @@ const percussionMidiChannel = 10;
 const RenderSecsPerCycle = 5;
 
 export class WerckmeisterMidiPlayer {
-    midiPlayer: MidiPlayer.Player;
+    midiPlayer: any;
     audioContext: AudioContext;
     instruments = new Map<number, Instrument>();
     percussion: Instrument|null;
@@ -66,10 +66,24 @@ export class WerckmeisterMidiPlayer {
         instrument.noteOff(this.audioBuffer, event, offset);
     }
 
+    controllerChange(event: IMidiEvent) {
+        // console.log(event.track, event.number, event.value);
+        // const instrument = this.getInstrument(event);
+        // if (!instrument) {
+        //     return;
+        // }
+        // instrument.controllerChange(event);
+    }
+
     programChange(event: IMidiEvent) {
         const instrumentName = GetInstrumentNameForPc(event.value);
         const instrument = new Instrument(instrumentName, this.audioContext);
         this.instruments.set(event.track, instrument);
+    }
+
+    pitchBend(event: IMidiEvent) {
+        const instrument = this.getInstrument(event);
+        instrument.pitchBend(event);
     }
 
     async load(base64Data: string) {
@@ -84,6 +98,7 @@ export class WerckmeisterMidiPlayer {
 
 
     render(): Promise<void> {
+        console.log((this.midiPlayer as any))
         return new Promise(resolve => {
             for(let i=0; i<this.events.length; ++i) {
                 const event = this.events[i];
@@ -92,6 +107,9 @@ export class WerckmeisterMidiPlayer {
                     case MidiEventNames.NoteOn: this.noteOn(event, eventTseconds); break;
                     case MidiEventNames.NoteOff: this.noteOff(event, eventTseconds); break;
                     case MidiEventNames.Pc: this.programChange(event); break;
+                    case MidiEventNames.Cc: this.controllerChange(event); break;
+                    case MidiEventNames.PitchBend: this.pitchBend(event); break;
+                    //default: console.log(event.name); break;
                 }
             }
             resolve();

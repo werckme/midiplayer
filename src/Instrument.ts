@@ -12,6 +12,8 @@ class Note {
 }
 
 export class Instrument {
+    pitch: number = 1;
+    volume: number = 1;
     private notes = new Map<string, Note>();
     public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
         if(InstrumentSampleMap.has(instrumentName)) {
@@ -42,7 +44,7 @@ export class Instrument {
         const samples = InstrumentSampleMap.get(this.instrumentName);
         const buffer = samples.getNoteSample(event.noteName);
         const startTimeSecs = note.startTimeSecs;
-        const volume = note.velocity/127;
+        const volume = note.velocity/127 * this.volume;
         if (!buffer) {
             return;
         }
@@ -60,8 +62,23 @@ export class Instrument {
                     break;
                 }
             }
-            tData[tIndex++] += sData[i] * volume * fadeOut;
+            const readIndex = Math.floor(i*this.pitch);
+            if (readIndex >= sData.length) {
+                break;
+            }
+            tData[tIndex++] += sData[readIndex] * volume * fadeOut;
         }
+    }
+
+    controllerChange(event: IMidiEvent) {
+        switch (event.number) {
+            //case 10: console.log(event.value);
+            //case 11: console.log(event.value);
+        }
+    }
+
+    pitchBend(event: IMidiEvent) {
+        console.log(event);
     }
 
 }
