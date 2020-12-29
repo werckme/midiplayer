@@ -1,3 +1,4 @@
+import { times } from "lodash";
 import { InstrumentNames } from "./GM";
 import { IMidiEvent } from "./IMidiEvent";
 import { InstrumentSamples } from "./InstrumentSamples";
@@ -12,7 +13,7 @@ class Note {
 }
 
 export class Instrument {
-    pitch: number = 1;
+    pitchBendCurve: number[] = [];
     volume: number = 1;
     private notes = new Map<string, Note>();
     public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
@@ -44,7 +45,9 @@ export class Instrument {
         const samples = InstrumentSampleMap.get(this.instrumentName);
         const buffer = samples.getNoteSample(event.noteName);
         const startTimeSecs = note.startTimeSecs;
-        const volume = note.velocity/127 * this.volume;
+        // exp((x-1)*3)
+        // const volume = note.velocity/127 * this.volume;
+        const volume = Math.exp(((note.velocity/127)-1)*3) + 0.2;
         if (!buffer) {
             return;
         }
@@ -53,6 +56,7 @@ export class Instrument {
         const sData = buffer.getChannelData(0);
         const tData = target.getChannelData(0);
         let tIndex = Math.floor(startTimeSecs * SampleRate);
+        let pitch = 1;
         const fadeOutIndex = numSamples - fadeOutSamples;
         for(let i=0; i<sData.length; ++i) {
             let fadeOut = 1;
@@ -62,23 +66,40 @@ export class Instrument {
                     break;
                 }
             }
-            const readIndex = Math.floor(i*this.pitch);
+            const newPitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : pitch;
+            if (Math.abs(newPitch - pitch) > 0.005) {
+                pitch = newPitch;
+            }
+            const readIndex = Math.round(i*pitch);
             if (readIndex >= sData.length) {
                 break;
             }
             tData[tIndex++] += sData[readIndex] * volume * fadeOut;
         }
+       // this.pitchBendCurve = [];
     }
 
     controllerChange(event: IMidiEvent) {
-        switch (event.number) {
-            //case 10: console.log(event.value);
-            //case 11: console.log(event.value);
-        }
+        // switch (event.number) {
+        //     //case 10: console.log(event.value);
+        //     //case 11: console.log(event.value);
+        // }
     }
 
     pitchBend(event: IMidiEvent) {
-        console.log(event);
+        const pitchBendValue = event.value / 16383;
+        let pitch = 1;
+        if (Math.abs(pitchBendValue - 0.5) < 0.001) {
+            pitch = 1;
+        }
+        else if (pitchBendValue > 0.5) {
+            const x = (pitchBendValue - 0.5) * 2;
+            pitch = x * 0.125 + 1;
+        } else {
+            const x = pitchBendValue * 2;
+            pitch = x * 0.11 + (8/9)
+        }
+        this.pitchBendCurve[Math.floor(event.playTime/1000*SampleRate)] = pitch;
     }
 
 }

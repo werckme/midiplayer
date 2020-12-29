@@ -8,13 +8,11 @@ export const MidiEventNames = {
 
 export interface IMidiEvent {
     name: string;
-    noteName: string;
-    byteIndex: number;
+    noteName?: string;
     channel: number;
     delta: number;
-    tick: number;
     track: number;
     value: number;
-    velocity: number;
-    number: number;
+    velocity?: number;
+    playTime: number;
 }

@@ -25,6 +25,6 @@
   "dependencies": {
     "@types/lodash": "^4.14.165",
     "lodash": "^4.17.20",
-    "midi-json-parser": "^8.0.17"
+    "midifile": "^2.0.0"
   }
 }
