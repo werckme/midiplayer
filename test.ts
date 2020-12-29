@@ -15,7 +15,7 @@ los.onclick = async (ev: Event) => {
     log("play pressed")
     werckmeisterMidiPlayer.initAudioEnvironment(ev);
     await werckmeisterMidiPlayer.load(ennios);
-    werckmeisterMidiPlayer.overrideTempo(140)
+    //werckmeisterMidiPlayer.overrideTempo(140)
     log("loaded")
     const t = performance.now();
     werckmeisterMidiPlayer.play();

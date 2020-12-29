@@ -3,6 +3,7 @@ import * as _ from 'lodash';
 import { Instrument, SampleRate } from "./Instrument";
 import { IMidiEvent, MidiEventNames } from "./IMidiEvent";
 import { GetInstrumentNameForPc } from "./GM";
+import { parseArrayBuffer } from 'midi-json-parser';
 
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 10;
