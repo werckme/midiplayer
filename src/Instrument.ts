@@ -1,8 +1,7 @@
 import { times } from "lodash";
-import { InstrumentNames } from "./GM";
+import { DefaultInstrument, InstrumentNames } from "./GM";
 import { IMidiEvent } from "./IMidiEvent";
 import { InstrumentSamples } from "./InstrumentSamples";
-
 
 const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SampleRate = 44100;
@@ -14,8 +13,16 @@ class Note {
 
 export class Instrument {
     pitchBendCurve: number[] = [];
-    volume: number = 1;
+    lastPitch: number = 1;
+
+    exprCurve: number[] = [];
+    lastExpr: number = 1;
+    
+    panoramaCurve: number[] = [];
+    lastPanorama: number = 0.5;
+
     private notes = new Map<string, Note>();
+    private instrumentName: string;
     public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
         if(InstrumentSampleMap.has(instrumentName)) {
             return;
@@ -25,7 +32,18 @@ export class Instrument {
         InstrumentSampleMap.set(instrumentName, samples);
     }
 
-    constructor(private instrumentName: string, private audioContext: AudioContext) {
+    constructor(private audioContext: AudioContext) {
+        this.instrumentName = DefaultInstrument;
+    }
+
+    setInstrument(name: string) {
+        this.pitchBendCurve = [];
+        this.lastPitch = 1;
+        this.exprCurve = [];
+        this.lastExpr = 1;
+        this.panoramaCurve = [];
+        this.lastPanorama = 0.5;
+        this.instrumentName = name;
     }
 
     /**
@@ -43,20 +61,24 @@ export class Instrument {
             return;
         }
         const samples = InstrumentSampleMap.get(this.instrumentName);
+        if (!samples) {
+            throw new Error(`no samples found for instrument: "${this.instrumentName}"`);
+        }
         const buffer = samples.getNoteSample(event.noteName);
         const startTimeSecs = note.startTimeSecs;
-        // exp((x-1)*3)
-        // const volume = note.velocity/127 * this.volume;
-        const volume = Math.exp(((note.velocity/127)-1)*3) + 0.2;
+        // exp((x-1)*3) 
+        // https://www.desmos.com/calculator/qo25cegi5e
+        // const velocity = note.velocity/127 * this.volume;
+        const velocity = Math.exp(((note.velocity/127)-1)*3) + 0.2;
         if (!buffer) {
             return;
         }
         const numSamples = (offset - startTimeSecs) * SampleRate;
         const fadeOutSamples = Math.min(numSamples, FadeOutSamples);
         const sData = buffer.getChannelData(0);
-        const tData = target.getChannelData(0);
+        const tDataL = target.getChannelData(0);
+        const tDataR = target.getChannelData(1);
         let tIndex = Math.floor(startTimeSecs * SampleRate);
-        let pitch = 1;
         const fadeOutIndex = numSamples - fadeOutSamples;
         let phasePtr = 0;
         for(let i=0; i<sData.length; ++i) {
@@ -67,28 +89,43 @@ export class Instrument {
                     break;
                 }
             }
-            pitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : pitch;
+            this.lastPitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : this.lastPitch;
+            this.lastExpr = this.exprCurve[tIndex] ? this.exprCurve[tIndex] : this.lastExpr;
+            this.lastPanorama = this.panoramaCurve[tIndex] ? this.panoramaCurve[tIndex] : this.lastPanorama;
             const ptr = Math.round(phasePtr);
             const linInt = phasePtr - ptr;
             if ((ptr+1) >= sData.length) {
                 break;
             }
-            tData[tIndex++] += ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * volume * fadeOut;
-            phasePtr = phasePtr + pitch;
+            const sampleValue = ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * velocity * this.lastExpr * fadeOut;
+            // https://www.desmos.com/calculator/6tzweuanxw
+            tDataL[tIndex] += sampleValue * (-this.lastPanorama + 1);
+            tDataR[tIndex] += sampleValue * (this.lastPanorama);
+            ++tIndex;
+            phasePtr = phasePtr + this.lastPitch;
         }
     }
 
+    expression(event: IMidiEvent) {
+        this.exprCurve[Math.floor(event.playTime/1000*SampleRate)] = event.value / 127;
+    }
+
+    panorama(event: IMidiEvent) {
+        this.panoramaCurve[Math.floor(event.playTime/1000*SampleRate)] = event.value / 127;
+    }
+
     controllerChange(event: IMidiEvent) {
-        // switch (event.number) {
-        //     //case 10: console.log(event.value);
-        //     //case 11: console.log(event.value);
-        // }
+        switch (event.number) {
+            case 0xa: return this.panorama(event);
+            case 0xb: return this.expression(event);
+        }
     }
 
     /**
      * @param event pitch min/max one whole tone which has the relation of 9/8
      */
     pitchBend(event: IMidiEvent) {
+        // https://www.desmos.com/calculator/rhhb5ihehk?
         const pitchBendValue = event.value / 16383;
         let pitch = 1;
         if (Math.abs(pitchBendValue - 0.5) < 0.001) {

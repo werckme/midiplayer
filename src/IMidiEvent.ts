@@ -13,6 +13,7 @@ export interface IMidiEvent {
     delta: number;
     track: number;
     value: number;
+    number?: number;
     velocity?: number;
     playTime: number;
 }

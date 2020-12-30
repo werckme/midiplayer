@@ -129,6 +129,8 @@ export const InstrumentNames = [
     "gunshot"
   ]
 
+  export const DefaultInstrument = InstrumentNames[0];
+
   export function GetInstrumentNameForPc(pcNumber: number) {
     return InstrumentNames[pcNumber];
   }
