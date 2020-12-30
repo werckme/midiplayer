@@ -16,11 +16,11 @@ export enum PlayerState {
     Stopped,
     Preparing,
     Playing,
-    Paused,
 }
 
 export class WerckmeisterMidiPlayer {
-    playerState: PlayerState = PlayerState.Stopped;
+    private _playerState: PlayerState = PlayerState.Stopped;
+    playedTime: number = 0;
     midifile: any;
     audioContext: AudioContext;
     instruments = new Map<number, Instrument>();
@@ -28,10 +28,23 @@ export class WerckmeisterMidiPlayer {
     events: IMidiEvent[];
     audioBuffer: AudioBuffer;
     playblackNode: AudioBufferSourceNode;
-
+    onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
+    onMidiEvent: (event: IMidiEvent) => void = ()=>{};
     
     private get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
+    }
+
+    get playerState(): PlayerState {
+        return this._playerState;
+    }
+
+    set playerState(newState: PlayerState) {
+        const oldState = this._playerState;
+        this._playerState = newState;
+        if (newState !== oldState) {
+            this.onPlayerStateChanged(oldState, newState);
+        }
     }
 
     public initAudioEnvironment(event: Event) {
@@ -166,8 +179,8 @@ export class WerckmeisterMidiPlayer {
         await this.preprocessEvents(this.midifile.getEvents());
     }
 
-    async render(): Promise<void> {
-        return new Promise(resolve => {
+    async render() {
+        return new Promise<void>(resolve => {
             setTimeout(() => {
                 for(let i=0; i<this.events.length; ++i) {
                     const event = this.events[i];
@@ -190,6 +203,7 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile) {
             return;
         }
+        this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         try {
             const songTimeSecs = _.last(this.events).playTime/1000 + 5;
@@ -199,7 +213,7 @@ export class WerckmeisterMidiPlayer {
             this.playblackNode.connect(this.audioContext.destination);
             this.playblackNode.start();
             this.playerState = PlayerState.Playing;
-            this.startMidiEventNotification();
+            this.startEventNotification();
         } catch {
             this.playerState = PlayerState.Stopped;
         }
@@ -208,11 +222,12 @@ export class WerckmeisterMidiPlayer {
     /**
      * fires the midi events parallel to the playback
      */
-    startMidiEventNotification() {
+    startEventNotification() {
         let eventIndex = 0;
         const startTime = performance.now();
         const intervalId = setInterval(() => {
             const t = performance.now() - startTime;
+            this.playedTime = t / 1000;
             if (this.playerState !== PlayerState.Playing) {
                 clearInterval(intervalId);
             }
@@ -221,7 +236,7 @@ export class WerckmeisterMidiPlayer {
                 if (event.playTime > t) {
                     break;
                 }
-                console.log(event);
+                this.onMidiEvent(event);
                 ++eventIndex;
                 if (eventIndex >= this.events.length) {
                     clearInterval(intervalId);

@@ -23,7 +23,7 @@ export class Instrument {
 
     private notes = new Map<string, Note>();
     private instrumentName: string;
-    public static async loadSamples(instrumentName: string, audioContext: AudioContext): Promise<void> {
+    public static async loadSamples(instrumentName: string, audioContext: AudioContext) {
         if(InstrumentSampleMap.has(instrumentName)) {
             return;
         }
