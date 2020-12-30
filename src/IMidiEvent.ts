@@ -1,19 +1,18 @@
-export const MidiEventNames = {
-    NoteOn: "Note on",
-    NoteOff: "Note off",
-    Pc: "Program Change",
-    Cc: "Controller Change",
-    PitchBend: "Pitch Bend"
+export const MidiEventTypes = {
+    NoteOn: 9,
+    NoteOff: 8,
+    Pc: 0xC,
+    Cc: 0xB,
+    PitchBend: 0xE
 }
 
 export interface IMidiEvent {
-    name: string;
+    type: number;
     noteName?: string;
     channel: number;
-    delta: number;
     track: number;
-    value: number;
-    number?: number;
-    velocity?: number;
+    param1: number;
+    param2?: number;
     playTime: number;
+    pitchbendValue?: number;
 }

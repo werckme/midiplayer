@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 import { Instrument, SampleRate } from "./Instrument";
-import { IMidiEvent, MidiEventNames } from "./IMidiEvent";
+import { IMidiEvent, MidiEventTypes } from "./IMidiEvent";
 import { DefaultInstrument, GetInstrumentNameForPc } from "./GM";
 import * as MidiFileModule from "midifile";
 const MidiFile = (MidiFileModule as any).default;
@@ -10,10 +10,17 @@ import { Constants } from './Constants';
 
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 9;
+const EventEmitterRefreshRateMillis = 10;
 
-
+export enum PlayerState {
+    Stopped,
+    Preparing,
+    Playing,
+    Paused,
+}
 
 export class WerckmeisterMidiPlayer {
+    playerState: PlayerState = PlayerState.Stopped;
     midifile: any;
     audioContext: AudioContext;
     instruments = new Map<number, Instrument>();
@@ -21,6 +28,7 @@ export class WerckmeisterMidiPlayer {
     events: IMidiEvent[];
     audioBuffer: AudioBuffer;
     playblackNode: AudioBufferSourceNode;
+
     
     private get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
@@ -35,48 +43,45 @@ export class WerckmeisterMidiPlayer {
 
     private convertEvent(event: any): IMidiEvent | null {
         const pc = (x) => ({
-            name: MidiEventNames.Pc,
+            type: MidiEventTypes.Pc,
             channel: x.channel,
-            delta: x.delta,
             track: x.track,
-            value: x.param1,
+            param1: x.param1,
             playTime: x.playTime
         });
         const cc = (x) => ({
-            name: MidiEventNames.Cc,
+            type: MidiEventTypes.Cc,
             channel: x.channel,
-            delta: x.delta,
             track: x.track,
-            number: x.param1,
-            value: x.param2,
+            param1: x.param1,
+            param2: x.param2,
             playTime: x.playTime
         });        
         const noteon = (x) => ({
-            name: MidiEventNames.NoteOn,
+            type: MidiEventTypes.NoteOn,
             noteName: Constants.NOTES[x.param1],
             channel: x.channel,
-            delta: x.delta,
             track: x.track,
-            value: x.param1,
-            velocity: x.param2,
+            param1: x.param1,
+            param2: x.param2,
             playTime: x.playTime
         });
         const noteoff = (x) => ({
-            name: MidiEventNames.NoteOff,
+            type: MidiEventTypes.NoteOff,
             noteName: Constants.NOTES[x.param1],
             channel: x.channel,
-            delta: x.delta,
             track: x.track,
-            value: x.param1,
-            velocity: x.param2,
+            param1: x.param1,
+            param2: x.param2,
             playTime: x.playTime
         });
         const pitchbend = (x) => ({
-            name: MidiEventNames.PitchBend,
+            type: MidiEventTypes.PitchBend,
             channel: x.channel,
-            delta: x.delta,
             track: x.track,
-            value: x.param2*128 + x.param1,
+            param1: x.param1,
+            param2: x.param2,
+            pitchbendValue: x.param2*128 + x.param1,
             playTime: x.playTime
         });        
         if (event.type === MidiEvents.EVENT_MIDI) {
@@ -144,7 +149,7 @@ export class WerckmeisterMidiPlayer {
     }
 
     programChange(event: IMidiEvent) {
-        const instrumentName = GetInstrumentNameForPc(event.value);
+        const instrumentName = GetInstrumentNameForPc(event.param1);
         const instrument = new Instrument(this.audioContext);
         instrument.setInstrument(instrumentName);
         this.instruments.set(event.track, instrument);
@@ -161,19 +166,18 @@ export class WerckmeisterMidiPlayer {
         await this.preprocessEvents(this.midifile.getEvents());
     }
 
-
     async render(): Promise<void> {
         return new Promise(resolve => {
             setTimeout(() => {
                 for(let i=0; i<this.events.length; ++i) {
                     const event = this.events[i];
                     let eventTseconds = event.playTime / 1000;
-                    switch(event.name) {
-                        case MidiEventNames.NoteOn: this.noteOn(event, eventTseconds); break;
-                        case MidiEventNames.NoteOff: this.noteOff(event, eventTseconds); break;
-                        case MidiEventNames.Pc: this.programChange(event); break;
-                        case MidiEventNames.Cc: this.controllerChange(event); break;
-                        case MidiEventNames.PitchBend: this.pitchBend(event); break;
+                    switch(event.type) {
+                        case MidiEventTypes.NoteOn: this.noteOn(event, eventTseconds); break;
+                        case MidiEventTypes.NoteOff: this.noteOff(event, eventTseconds); break;
+                        case MidiEventTypes.Pc: this.programChange(event); break;
+                        case MidiEventTypes.Cc: this.controllerChange(event); break;
+                        case MidiEventTypes.PitchBend: this.pitchBend(event); break;
                         //default: console.log(event.name); break;
                     }
                 }
@@ -186,12 +190,46 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile) {
             return;
         }
-        const songTimeSecs = _.last(this.events).playTime/1000 + 5;
-        this.audioBuffer = new AudioBuffer({length: songTimeSecs*SampleRate, sampleRate: SampleRate, numberOfChannels: 2})
-        await this.render();
-        this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
-        this.playblackNode.connect(this.audioContext.destination);
-        this.playblackNode.start();
+        this.playerState = PlayerState.Preparing;
+        try {
+            const songTimeSecs = _.last(this.events).playTime/1000 + 5;
+            this.audioBuffer = new AudioBuffer({length: songTimeSecs*SampleRate, sampleRate: SampleRate, numberOfChannels: 2})
+            await this.render();
+            this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
+            this.playblackNode.connect(this.audioContext.destination);
+            this.playblackNode.start();
+            this.playerState = PlayerState.Playing;
+            this.startMidiEventNotification();
+        } catch {
+            this.playerState = PlayerState.Stopped;
+        }
+    }
+
+    /**
+     * fires the midi events parallel to the playback
+     */
+    startMidiEventNotification() {
+        let eventIndex = 0;
+        const startTime = performance.now();
+        const intervalId = setInterval(() => {
+            const t = performance.now() - startTime;
+            if (this.playerState !== PlayerState.Playing) {
+                clearInterval(intervalId);
+            }
+            while(true) {
+                const event = this.events[eventIndex];
+                if (event.playTime > t) {
+                    break;
+                }
+                console.log(event);
+                ++eventIndex;
+                if (eventIndex >= this.events.length) {
+                    clearInterval(intervalId);
+                    break;
+                }
+            }
+
+        }, EventEmitterRefreshRateMillis);
     }
 
     stop() {
@@ -199,6 +237,7 @@ export class WerckmeisterMidiPlayer {
             return;
         }
         this.playblackNode.stop();
+        this.playerState = PlayerState.Stopped;
     }
 
 }

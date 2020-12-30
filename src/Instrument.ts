@@ -52,7 +52,7 @@ export class Instrument {
      * @param offset 
      */
     noteOn(event: IMidiEvent, offset: number = 0) {
-        this.notes.set(event.noteName, new Note(offset, event.velocity));
+        this.notes.set(event.noteName, new Note(offset, event.param2));
     }
 
     noteOff(target: AudioBuffer, event: IMidiEvent, offset: number) {
@@ -107,15 +107,15 @@ export class Instrument {
     }
 
     expression(event: IMidiEvent) {
-        this.exprCurve[Math.floor(event.playTime/1000*SampleRate)] = event.value / 127;
+        this.exprCurve[Math.floor(event.playTime/1000*SampleRate)] = event.param2 / 127;
     }
 
     panorama(event: IMidiEvent) {
-        this.panoramaCurve[Math.floor(event.playTime/1000*SampleRate)] = event.value / 127;
+        this.panoramaCurve[Math.floor(event.playTime/1000*SampleRate)] = event.param2 / 127;
     }
 
     controllerChange(event: IMidiEvent) {
-        switch (event.number) {
+        switch (event.param1) {
             case 0xa: return this.panorama(event);
             case 0xb: return this.expression(event);
         }
@@ -126,7 +126,7 @@ export class Instrument {
      */
     pitchBend(event: IMidiEvent) {
         // https://www.desmos.com/calculator/rhhb5ihehk?
-        const pitchBendValue = event.value / 16383;
+        const pitchBendValue = event.pitchbendValue / 16383;
         let pitch = 1;
         if (Math.abs(pitchBendValue - 0.5) < 0.001) {
             pitch = 1;
