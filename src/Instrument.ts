@@ -58,6 +58,7 @@ export class Instrument {
         let tIndex = Math.floor(startTimeSecs * SampleRate);
         let pitch = 1;
         const fadeOutIndex = numSamples - fadeOutSamples;
+        let phasePtr = 0;
         for(let i=0; i<sData.length; ++i) {
             let fadeOut = 1;
             if (i >= fadeOutIndex) {
@@ -66,17 +67,15 @@ export class Instrument {
                     break;
                 }
             }
-            const newPitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : pitch;
-            if (Math.abs(newPitch - pitch) > 0.005) {
-                pitch = newPitch;
-            }
-            const readIndex = Math.round(i*pitch);
-            if (readIndex >= sData.length) {
+            pitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : pitch;
+            const ptr = Math.round(phasePtr);
+            const linInt = phasePtr - ptr;
+            if ((ptr+1) >= sData.length) {
                 break;
             }
-            tData[tIndex++] += sData[readIndex] * volume * fadeOut;
+            tData[tIndex++] += ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * volume * fadeOut;
+            phasePtr = phasePtr + pitch;
         }
-       // this.pitchBendCurve = [];
     }
 
     controllerChange(event: IMidiEvent) {
@@ -86,6 +85,9 @@ export class Instrument {
         // }
     }
 
+    /**
+     * @param event pitch min/max one whole tone which has the relation of 9/8
+     */
     pitchBend(event: IMidiEvent) {
         const pitchBendValue = event.value / 16383;
         let pitch = 1;
@@ -97,7 +99,7 @@ export class Instrument {
             pitch = x * 0.125 + 1;
         } else {
             const x = pitchBendValue * 2;
-            pitch = x * 0.11 + (8/9)
+            pitch = x * 0.111111 + (8/9)
         }
         this.pitchBendCurve[Math.floor(event.playTime/1000*SampleRate)] = pitch;
     }

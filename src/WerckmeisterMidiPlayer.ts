@@ -153,19 +153,21 @@ export class WerckmeisterMidiPlayer {
 
     async render(): Promise<void> {
         return new Promise(resolve => {
-            for(let i=0; i<this.events.length; ++i) {
-                const event = this.events[i];
-                let eventTseconds = event.playTime / 1000;
-                switch(event.name) {
-                    case MidiEventNames.NoteOn: this.noteOn(event, eventTseconds); break;
-                    case MidiEventNames.NoteOff: this.noteOff(event, eventTseconds); break;
-                    case MidiEventNames.Pc: this.programChange(event); break;
-                    case MidiEventNames.Cc: this.controllerChange(event); break;
-                    case MidiEventNames.PitchBend: this.pitchBend(event); break;
-                    //default: console.log(event.name); break;
+            setTimeout(() => {
+                for(let i=0; i<this.events.length; ++i) {
+                    const event = this.events[i];
+                    let eventTseconds = event.playTime / 1000;
+                    switch(event.name) {
+                        case MidiEventNames.NoteOn: this.noteOn(event, eventTseconds); break;
+                        case MidiEventNames.NoteOff: this.noteOff(event, eventTseconds); break;
+                        case MidiEventNames.Pc: this.programChange(event); break;
+                        case MidiEventNames.Cc: this.controllerChange(event); break;
+                        case MidiEventNames.PitchBend: this.pitchBend(event); break;
+                        //default: console.log(event.name); break;
+                    }
                 }
-            }
-            resolve();
+                resolve();
+            });
         });
     }
 

@@ -14,7 +14,7 @@ function log(str:string) {
 los.onclick = async (ev: Event) => {
     log("play pressed")
     werckmeisterMidiPlayer.initAudioEnvironment(ev);
-    await werckmeisterMidiPlayer.load(ennios);
+    await werckmeisterMidiPlayer.load(blackpages);
     log("loaded")
     const t = performance.now();
     werckmeisterMidiPlayer.play();
