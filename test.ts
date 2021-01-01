@@ -2,6 +2,7 @@ import { InstrumentNames } from './src/GM';
 import { IMidiEvent, MidiEventTypes } from './src/IMidiEvent';
 import {PlayerState, WerckmeisterMidiPlayer} from './src/WerckmeisterMidiPlayer';
 import {ipanema, c9, mario, blackpages, ennios, pitch, cc} from './testmidi';
+import 'regenerator-runtime/runtime'
 
 const werckmeisterMidiPlayer = new WerckmeisterMidiPlayer();
 

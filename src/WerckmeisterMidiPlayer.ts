@@ -110,6 +110,10 @@ export class WerckmeisterMidiPlayer {
     }
 
 
+    private void addAbsoluteTickPosition() {
+
+    }
+
     private async preprocessEvents(events) {
         let neededInstruments = _.chain(events)
             .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
@@ -176,6 +180,7 @@ export class WerckmeisterMidiPlayer {
     public async load(base64Data: string) {
         const bff = Base64Binary.decodeArrayBuffer(base64Data);
         this.midifile = new MidiFile(bff);
+        console.log(this.midifile);
         await this.preprocessEvents(this.midifile.getEvents());
     }
 
