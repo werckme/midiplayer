@@ -22,24 +22,24 @@ export class WerckmeisterMidiPlayer {
     private _playerState: PlayerState = PlayerState.Stopped;
     playedTime: number = 0;
     midifile: any;
-    audioContext: AudioContext;
-    instruments = new Map<number, Instrument>();
-    percussion: Instrument|null;
-    events: IMidiEvent[];
-    audioBuffer: AudioBuffer;
-    playblackNode: AudioBufferSourceNode;
-    onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
-    onMidiEvent: (event: IMidiEvent) => void = ()=>{};
+    private audioContext: AudioContext;
+    private instruments = new Map<number, Instrument>();
+    private percussion: Instrument|null;
+    private events: IMidiEvent[];
+    private audioBuffer: AudioBuffer;
+    private playblackNode: AudioBufferSourceNode;
+    public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
+    public onMidiEvent: (event: IMidiEvent) => void = ()=>{};
     
     private get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
 
-    get playerState(): PlayerState {
+    public get playerState(): PlayerState {
         return this._playerState;
     }
 
-    set playerState(newState: PlayerState) {
+    public set playerState(newState: PlayerState) {
         const oldState = this._playerState;
         this._playerState = newState;
         if (newState !== oldState) {
@@ -146,40 +146,40 @@ export class WerckmeisterMidiPlayer {
         return this.instruments.get(event.track);
     }
 
-    noteOn(event: IMidiEvent, offset: number) {
+    private noteOn(event: IMidiEvent, offset: number) {
         const instrument = this.getInstrument(event);
         instrument.noteOn(event, offset);
     }
 
-    noteOff(event: IMidiEvent, offset: number) {
+    private noteOff(event: IMidiEvent, offset: number) {
         const instrument = this.getInstrument(event);
         instrument.noteOff(this.audioBuffer, event, offset);
     }
 
-    controllerChange(event: IMidiEvent) {
+    private controllerChange(event: IMidiEvent) {
         const instrument = this.getInstrument(event);
         instrument.controllerChange(event);
     }
 
-    programChange(event: IMidiEvent) {
+    private programChange(event: IMidiEvent) {
         const instrumentName = GetInstrumentNameForPc(event.param1);
         const instrument = new Instrument(this.audioContext);
         instrument.setInstrument(instrumentName);
         this.instruments.set(event.track, instrument);
     }
 
-    pitchBend(event: IMidiEvent) {
+    private pitchBend(event: IMidiEvent) {
         const instrument = this.getInstrument(event);
         instrument.pitchBend(event);
     }
 
-    async load(base64Data: string) {
+    public async load(base64Data: string) {
         const bff = Base64Binary.decodeArrayBuffer(base64Data);
         this.midifile = new MidiFile(bff);
         await this.preprocessEvents(this.midifile.getEvents());
     }
 
-    async render() {
+    private async render() {
         return new Promise<void>(resolve => {
             setTimeout(() => {
                 for(let i=0; i<this.events.length; ++i) {
@@ -199,7 +199,7 @@ export class WerckmeisterMidiPlayer {
         });
     }
 
-    async play() {
+    public async play() {
         if (!this.midifile) {
             return;
         }
@@ -222,7 +222,7 @@ export class WerckmeisterMidiPlayer {
     /**
      * fires the midi events parallel to the playback
      */
-    startEventNotification() {
+    private startEventNotification() {
         let eventIndex = 0;
         const startTime = performance.now();
         const intervalId = setInterval(() => {
@@ -247,7 +247,7 @@ export class WerckmeisterMidiPlayer {
         }, EventEmitterRefreshRateMillis);
     }
 
-    stop() {
+    public stop() {
         if (!this.midifile) {
             return;
         }
