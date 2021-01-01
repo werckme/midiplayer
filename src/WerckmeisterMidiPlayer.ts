@@ -60,6 +60,7 @@ export class WerckmeisterMidiPlayer {
             channel: x.channel,
             track: x.track,
             param1: x.param1,
+            absPositionTicks: x.absPositionTicks,
             playTime: x.playTime
         });
         const cc = (x) => ({
@@ -68,6 +69,7 @@ export class WerckmeisterMidiPlayer {
             track: x.track,
             param1: x.param1,
             param2: x.param2,
+            absPositionTicks: x.absPositionTicks,
             playTime: x.playTime
         });        
         const noteon = (x) => ({
@@ -77,6 +79,7 @@ export class WerckmeisterMidiPlayer {
             track: x.track,
             param1: x.param1,
             param2: x.param2,
+            absPositionTicks: x.absPositionTicks,
             playTime: x.playTime
         });
         const noteoff = (x) => ({
@@ -86,6 +89,7 @@ export class WerckmeisterMidiPlayer {
             track: x.track,
             param1: x.param1,
             param2: x.param2,
+            absPositionTicks: x.absPositionTicks,
             playTime: x.playTime
         });
         const pitchbend = (x) => ({
@@ -94,6 +98,7 @@ export class WerckmeisterMidiPlayer {
             track: x.track,
             param1: x.param1,
             param2: x.param2,
+            absPositionTicks: x.absPositionTicks,
             pitchbendValue: x.param2*128 + x.param1,
             playTime: x.playTime
         });        
@@ -109,12 +114,17 @@ export class WerckmeisterMidiPlayer {
         return null;
     }
 
-
-    private void addAbsoluteTickPosition() {
-
-    }
-
     private async preprocessEvents(events) {
+        const absolutePositions:number[] = [];
+        const addAbsolutePosition = (x: any) => {
+            let pos = absolutePositions[x.track] || 0;
+            // for some reason the delta value in x is not correct, so we fetch it via getTrackEvents()
+            const trackEvents:any[] = this.midifile.getTrackEvents(x.track);
+            const delta = (trackEvents.find(tev => tev.index === x.index)).delta || 0;
+            x.absPositionTicks = pos + delta;
+            absolutePositions[x.track] = x.absPositionTicks;
+            return x;
+        };
         let neededInstruments = _.chain(events)
             .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
             .map(x => GetInstrumentNameForPc(x.param1))
@@ -134,7 +144,7 @@ export class WerckmeisterMidiPlayer {
             await Instrument.loadSamples(instrumentName, this.audioContext);
         }
         this.events = _.chain(events)
-            .map(x => this.convertEvent(x))
+            .map(x => this.convertEvent(addAbsolutePosition(x)))
             .filter(x => !!x)
             .value();
     }
@@ -180,7 +190,6 @@ export class WerckmeisterMidiPlayer {
     public async load(base64Data: string) {
         const bff = Base64Binary.decodeArrayBuffer(base64Data);
         this.midifile = new MidiFile(bff);
-        console.log(this.midifile);
         await this.preprocessEvents(this.midifile.getEvents());
     }
 

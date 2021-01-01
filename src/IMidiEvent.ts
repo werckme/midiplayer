@@ -15,4 +15,5 @@ export interface IMidiEvent {
     param2?: number;
     playTime: number;
     pitchbendValue?: number;
+    absPositionTicks?: number;
 }
