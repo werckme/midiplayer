@@ -31,7 +31,7 @@ export class WerckmeisterMidiPlayer {
     public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
     public onMidiEvent: (event: IMidiEvent) => void = ()=>{};
     
-    private get ppq(): number {
+    public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
 
