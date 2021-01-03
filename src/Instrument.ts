@@ -2,24 +2,20 @@ import { times } from "lodash";
 import { DefaultInstrument, InstrumentNames } from "./GM";
 import { IMidiEvent } from "./IMidiEvent";
 import { InstrumentSamples } from "./InstrumentSamples";
+import * as _ from 'lodash';
 
 const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SampleRate = 44100;
-const FadeOutSamples = 500;
+const FadeOutSamples = 10;
 
 class Note {
     constructor(public startTimeSecs: number, public velocity: number) {}
 }
 
 export class Instrument {
-    pitchBendCurve: number[] = [];
-    lastPitch: number = 1;
-
-    exprCurve: number[] = [];
-    lastExpr: number = 1;
-    
-    panoramaCurve: number[] = [];
-    lastPanorama: number = 0.5;
+    pitchBendCurve = {};
+    exprCurve = {};
+    panoramaCurve = {};
 
     private notes = new Map<string, Note>();
     private instrumentName: string;
@@ -37,12 +33,6 @@ export class Instrument {
     }
 
     setInstrument(name: string) {
-        this.pitchBendCurve = [];
-        this.lastPitch = 1;
-        this.exprCurve = [];
-        this.lastExpr = 1;
-        this.panoramaCurve = [];
-        this.lastPanorama = 0.5;
         this.instrumentName = name;
     }
 
@@ -53,6 +43,20 @@ export class Instrument {
      */
     noteOn(event: IMidiEvent, offset: number = 0) {
         this.notes.set(event.noteName, new Note(offset, event.param2));
+    }
+
+    findLastValue(container: {}, currentIndex: number, defaultValue: number = 1): number {
+        const keys = _.chain(_.keys(container))
+            .map(x => Number.parseInt(x))
+            .filter(x => x <= currentIndex)
+            .orderBy(x => x)
+            .value();
+        if (keys.length === 0) {
+            return defaultValue;
+        }
+        const key = _.last(keys);
+        const value = container[key];
+        return value;
     }
 
     noteOff(target: AudioBuffer, event: IMidiEvent, offset: number) {
@@ -81,6 +85,9 @@ export class Instrument {
         let tIndex = Math.floor(startTimeSecs * SampleRate);
         const fadeOutIndex = numSamples - fadeOutSamples;
         let phasePtr = 0;
+        let lastPitch = this.findLastValue(this.pitchBendCurve, tIndex, 1);
+        let lastExpr = this.findLastValue(this.exprCurve, tIndex, 1);
+        let lastPanorama = this.findLastValue(this.panoramaCurve, tIndex, 0.5); 
         for(let i=0; i<sData.length; ++i) {
             let fadeOut = 1;
             if (i >= fadeOutIndex) {
@@ -89,20 +96,20 @@ export class Instrument {
                     break;
                 }
             }
-            this.lastPitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : this.lastPitch;
-            this.lastExpr = this.exprCurve[tIndex] ? this.exprCurve[tIndex] : this.lastExpr;
-            this.lastPanorama = this.panoramaCurve[tIndex] ? this.panoramaCurve[tIndex] : this.lastPanorama;
+            lastPitch = this.pitchBendCurve[tIndex] ? this.pitchBendCurve[tIndex] : lastPitch;
+            lastExpr = this.exprCurve[tIndex] !== undefined ? this.exprCurve[tIndex] : lastExpr;
+            lastPanorama = this.panoramaCurve[tIndex] !== undefined ? this.panoramaCurve[tIndex] : lastPanorama;
             const ptr = Math.round(phasePtr);
             const linInt = phasePtr - ptr;
             if ((ptr+1) >= sData.length) {
                 break;
             }
-            const sampleValue = ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * velocity * this.lastExpr * fadeOut;
+            const sampleValue = ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * velocity * lastExpr * fadeOut;
             // https://www.desmos.com/calculator/6tzweuanxw
-            tDataL[tIndex] += sampleValue * (-this.lastPanorama + 1);
-            tDataR[tIndex] += sampleValue * (this.lastPanorama);
+            tDataL[tIndex] += sampleValue * (-lastPanorama + 1);
+            tDataR[tIndex] += sampleValue * (lastPanorama);
             ++tIndex;
-            phasePtr = phasePtr + this.lastPitch;
+            phasePtr = phasePtr + lastPitch;
         }
     }
 

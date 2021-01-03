@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "deploy": "rm -rf dist && rm -rf out && npm run build && npm run deployDefs && cp package.json dist && cp README.md dist",
     "deployDefs": "tsc && cp out/WerckmeisterMidiPlayer.d.ts dist/index.d.ts && cp out/IMidiEvent.d.ts dist",
-    "build": "parcel build --no-source-maps src/WerckmeisterMidiPlayer.ts -o index.js"
+    "build": "parcel build --no-source-maps src/WerckmeisterMidiPlayer.ts -o index.js",
+    "dev": "parcel test.html"
   },
   "repository": {
     "type": "git",

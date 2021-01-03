@@ -176,10 +176,12 @@ export class WerckmeisterMidiPlayer {
     }
 
     private programChange(event: IMidiEvent) {
+        if (event.channel === percussionMidiChannel) {
+            return;
+        }
         const instrumentName = GetInstrumentNameForPc(event.param1);
-        const instrument = new Instrument(this.audioContext);
+        const instrument = this.getInstrument(event);
         instrument.setInstrument(instrumentName);
-        this.instruments.set(event.track, instrument);
     }
 
     private pitchBend(event: IMidiEvent) {
