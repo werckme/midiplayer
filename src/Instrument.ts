@@ -1,11 +1,10 @@
-import { times } from "lodash";
 import { DefaultInstrument, InstrumentNames } from "./GM";
 import { IMidiEvent } from "./IMidiEvent";
 import { InstrumentSamples } from "./InstrumentSamples";
 import * as _ from 'lodash';
 
 const InstrumentSampleMap = new Map<string, InstrumentSamples>();
-export const SampleRate = 44100;
+export const SupportedSampleRate = 44100;
 const FadeOutSamples = 10;
 
 class Note {
@@ -77,12 +76,12 @@ export class Instrument {
         if (!buffer) {
             return;
         }
-        const numSamples = (offset - startTimeSecs) * SampleRate;
+        const numSamples = (offset - startTimeSecs) * SupportedSampleRate;
         const fadeOutSamples = Math.min(numSamples, FadeOutSamples);
         const sData = buffer.getChannelData(0);
         const tDataL = target.getChannelData(0);
         const tDataR = target.getChannelData(1);
-        let tIndex = Math.floor(startTimeSecs * SampleRate);
+        let tIndex = Math.floor(startTimeSecs * SupportedSampleRate);
         const fadeOutIndex = numSamples - fadeOutSamples;
         let phasePtr = 0;
         let lastPitch = this.findLastValue(this.pitchBendCurve, tIndex, 1);
@@ -114,11 +113,11 @@ export class Instrument {
     }
 
     expression(event: IMidiEvent) {
-        this.exprCurve[Math.floor(event.playTime/1000*SampleRate)] = event.param2 / 127;
+        this.exprCurve[Math.floor(event.playTime/1000*SupportedSampleRate)] = event.param2 / 127;
     }
 
     panorama(event: IMidiEvent) {
-        this.panoramaCurve[Math.floor(event.playTime/1000*SampleRate)] = event.param2 / 127;
+        this.panoramaCurve[Math.floor(event.playTime/1000*SupportedSampleRate)] = event.param2 / 127;
     }
 
     controllerChange(event: IMidiEvent) {
@@ -145,7 +144,7 @@ export class Instrument {
             const x = pitchBendValue * 2;
             pitch = x * 0.111111 + (8/9)
         }
-        this.pitchBendCurve[Math.floor(event.playTime/1000*SampleRate)] = pitch;
+        this.pitchBendCurve[Math.floor(event.playTime/1000*SupportedSampleRate)] = pitch;
     }
 
 }

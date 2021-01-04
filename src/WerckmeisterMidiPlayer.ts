@@ -1,5 +1,5 @@
 import * as _ from 'lodash';
-import { Instrument, SampleRate } from "./Instrument";
+import { Instrument, SupportedSampleRate } from "./Instrument";
 import { IMidiEvent, MidiEventTypes } from "./IMidiEvent";
 import { DefaultInstrument, GetInstrumentNameForPc } from "./GM";
 import * as MidiFileModule from "midifile";
@@ -51,7 +51,7 @@ export class WerckmeisterMidiPlayer {
         if (this.audioContext) {
             return;
         }
-        this.audioContext = new AudioContext();
+        this.audioContext = new AudioContext({sampleRate: SupportedSampleRate});
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -223,7 +223,7 @@ export class WerckmeisterMidiPlayer {
         this.playerState = PlayerState.Preparing;
         try {
             const songTimeSecs = _.last(this.events).playTime/1000 + 5;
-            this.audioBuffer = new AudioBuffer({length: songTimeSecs*SampleRate, sampleRate: SampleRate, numberOfChannels: 2})
+            this.audioBuffer = new AudioBuffer({length: songTimeSecs*SupportedSampleRate, sampleRate: SupportedSampleRate, numberOfChannels: 2})
             await this.render();
             this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
             this.playblackNode.connect(this.audioContext.destination);
