@@ -117,12 +117,13 @@ export class WerckmeisterMidiPlayer {
     private async preprocessEvents(events) {
         const absolutePositions:number[] = [];
         const addAbsolutePosition = (x: any) => {
-            let pos = absolutePositions[x.track] || 0;
+            const trackId = x.track || 0;
+            let pos = absolutePositions[trackId] || 0;
             // for some reason the delta value in x is not correct, so we fetch it via getTrackEvents()
-            const trackEvents:any[] = this.midifile.getTrackEvents(x.track);
+            const trackEvents:any[] = this.midifile.getTrackEvents(trackId);
             const delta = (trackEvents.find(tev => tev.index === x.index)).delta || 0;
             x.absPositionTicks = pos + delta;
-            absolutePositions[x.track] = x.absPositionTicks;
+            absolutePositions[trackId] = x.absPositionTicks;
             return x;
         };
         let neededInstruments = _.chain(events)
@@ -216,18 +217,19 @@ export class WerckmeisterMidiPlayer {
     }
 
     public async play() {
-        if (!this.midifile) {
+        if (!this.midifile || this.playerState > PlayerState.Stopped) {
             return;
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         try {
-            const songTimeSecs = _.last(this.events).playTime/1000 + 5;
+            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
             this.audioBuffer = new AudioBuffer({length: songTimeSecs*SupportedSampleRate, sampleRate: SupportedSampleRate, numberOfChannels: 2})
             await this.render();
             this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
             this.playblackNode.connect(this.audioContext.destination);
             this.playblackNode.start();
+            this.playblackNode.onended = this.stop.bind(this);
             this.playerState = PlayerState.Playing;
             this.startEventNotification();
         } catch {
@@ -264,7 +266,7 @@ export class WerckmeisterMidiPlayer {
     }
 
     public stop() {
-        if (!this.midifile) {
+        if (!this.midifile || this.playerState === PlayerState.Stopped) {
             return;
         }
         this.playblackNode.stop();

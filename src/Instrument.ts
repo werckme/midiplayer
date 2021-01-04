@@ -5,7 +5,7 @@ import * as _ from 'lodash';
 
 const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SupportedSampleRate = 44100;
-const FadeOutSamples = 10;
+const FadeOutSamples = (SupportedSampleRate / 1000) * 5;
 
 class Note {
     constructor(public startTimeSecs: number, public velocity: number) {}
@@ -82,7 +82,7 @@ export class Instrument {
         const tDataL = target.getChannelData(0);
         const tDataR = target.getChannelData(1);
         let tIndex = Math.floor(startTimeSecs * SupportedSampleRate);
-        const fadeOutIndex = numSamples - fadeOutSamples;
+        const fadeOutIndex = numSamples + fadeOutSamples;
         let phasePtr = 0;
         let lastPitch = this.findLastValue(this.pitchBendCurve, tIndex, 1);
         let lastExpr = this.findLastValue(this.exprCurve, tIndex, 1);

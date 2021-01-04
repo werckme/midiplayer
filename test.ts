@@ -38,7 +38,7 @@ werckmeisterMidiPlayer.onPlayerStateChanged = (oldState: PlayerState, newState: 
 los.onclick = async (ev: Event) => {
     log("play pressed")
     werckmeisterMidiPlayer.initAudioEnvironment(ev);
-    await werckmeisterMidiPlayer.load(ipanema);
+    await werckmeisterMidiPlayer.load(mario);
     werckmeisterMidiPlayer.play();
 }
 
