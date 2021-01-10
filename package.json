@@ -1,6 +1,6 @@
 {
-  "name": "werckmeister-midiplayer",
-  "version": "1.0.57",
+  "name": "@werckmeister/midiplayer",
+  "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
