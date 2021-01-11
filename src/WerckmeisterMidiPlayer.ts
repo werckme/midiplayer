@@ -27,7 +27,7 @@ export class WerckmeisterMidiPlayer {
     private percussion: Instrument|null;
     private events: IMidiEvent[];
     private audioBuffer: AudioBuffer;
-    private playblackNode: AudioBufferSourceNode;
+    private playbackNode: AudioBufferSourceNode;
     public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
     public onMidiEvent: (event: IMidiEvent) => void = ()=>{};
     
@@ -226,10 +226,10 @@ export class WerckmeisterMidiPlayer {
             const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
             this.audioBuffer = new AudioBuffer({length: songTimeSecs*SupportedSampleRate, sampleRate: SupportedSampleRate, numberOfChannels: 2})
             await this.render();
-            this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
-            this.playblackNode.connect(this.audioContext.destination);
-            this.playblackNode.start();
-            this.playblackNode.onended = this.stop.bind(this);
+            this.playbackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
+            this.playbackNode.connect(this.audioContext.destination);
+            this.playbackNode.start();
+            this.playbackNode.onended = this.stop.bind(this);
             this.playerState = PlayerState.Playing;
             this.startEventNotification();
         } catch {
@@ -269,7 +269,7 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState === PlayerState.Stopped) {
             return;
         }
-        this.playblackNode.stop();
+        this.playbackNode.stop();
         this.playerState = PlayerState.Stopped;
     }
 
