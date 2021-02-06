@@ -7,6 +7,8 @@ const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SupportedSampleRate = 44100;
 const FadeOutSamples = (SupportedSampleRate / 1000) * 5;
 
+const MasterVolume = 3;
+
 class Note {
     constructor(public startTimeSecs: number, public velocity: number) {}
 }
@@ -103,7 +105,7 @@ export class Instrument {
             if ((ptr+1) >= sData.length) {
                 break;
             }
-            const sampleValue = ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * velocity * lastExpr * fadeOut;
+            const sampleValue = ((sData[ptr+1]*linInt)+(sData[ptr])*(1-linInt)) * velocity * lastExpr * fadeOut * MasterVolume;
             // https://www.desmos.com/calculator/6tzweuanxw
             tDataL[tIndex] += sampleValue * (-lastPanorama + 1);
             tDataR[tIndex] += sampleValue * (lastPanorama);
