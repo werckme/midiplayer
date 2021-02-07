@@ -3,11 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - main
       - feature/* 
       - develop
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -29,13 +29,13 @@ jobs:
           name: dist-${{ github.sha }}
           path: dist/**/*
       - name: set version
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main'
         working-directory: dist
         run: npm version 1.0.2-$VERSION
         env:
           VERSION: ${{ github.run_number }}
       - name: set version
-        if: github.ref != 'refs/heads/master'
+        if: github.ref != 'refs/heads/main'
         working-directory: dist
         run: npm version 1.0.2-dev-$VERSION
         env:
