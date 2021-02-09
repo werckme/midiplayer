@@ -7,7 +7,7 @@ const InstrumentSampleMap = new Map<string, InstrumentSamples>();
 export const SupportedSampleRate = 44100;
 const FadeOutSamples = (SupportedSampleRate / 1000) * 5;
 
-const MasterVolume = 3;
+const MasterVolume = 8;
 
 class Note {
     constructor(public startTimeSecs: number, public velocity: number) {}
