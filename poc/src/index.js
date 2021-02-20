@@ -1,4 +1,4 @@
-// import * as JSSynth from 'js-synthesizer'
+import * as JSSynth from 'js-synthesizer';
 
 async function fetchBinary(url) {
     const response = await fetch(url);
@@ -32,6 +32,7 @@ async function play() {
         await synth.waitForPlayerStopped();
         await synth.waitForVoicesStopped();
         synth.close();
+        node.disconnect();
         console.log("done");
     } catch(ex) {
         console.log("error");
