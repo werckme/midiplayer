@@ -1,5 +1,4 @@
 import * as _ from 'lodash';
-import { Instrument, SupportedSampleRate } from "./Instrument";
 import { IMidiEvent, MidiEventTypes } from "./IMidiEvent";
 import { DefaultInstrument, GetInstrumentNameForPc } from "./GM";
 import * as MidiFileModule from "midifile";
@@ -23,11 +22,7 @@ export class WerckmeisterMidiPlayer {
     playedTime: number = 0;
     midifile: any;
     private audioContext: AudioContext;
-    private instruments = new Map<number, Instrument>();
-    private percussion: Instrument|null;
     private events: IMidiEvent[];
-    private audioBuffer: AudioBuffer;
-    private playbackNode: AudioBufferSourceNode;
     public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
     public onMidiEvent: (event: IMidiEvent) => void = ()=>{};
     
@@ -48,10 +43,10 @@ export class WerckmeisterMidiPlayer {
     }
 
     public initAudioEnvironment(event: Event) {
-        if (this.audioContext) {
-            return;
-        }
-        this.audioContext = new AudioContext({sampleRate: SupportedSampleRate});
+        // if (this.audioContext) {
+        //     return;
+        // }
+        // this.audioContext = new AudioContext({sampleRate: SupportedSampleRate});
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -126,68 +121,11 @@ export class WerckmeisterMidiPlayer {
             absolutePositions[trackId] = x.absPositionTicks;
             return x;
         };
-        let neededInstruments = _.chain(events)
-            .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
-            .map(x => GetInstrumentNameForPc(x.param1))
-            .uniq()
-            .filter(x => !!x)
-            .value();
-        neededInstruments.push(DefaultInstrument);
-        const needsPercussion = _.chain(events)
-            .some(x => x.channel === percussionMidiChannel)
-            .value();
-        if (needsPercussion) {
-            neededInstruments.push(percussionInstrumentName);
-            this.percussion = new Instrument(this.audioContext);
-            this.percussion.setInstrument(percussionInstrumentName);
-        }
-        for(const instrumentName of neededInstruments) {
-            await Instrument.loadSamples(instrumentName, this.audioContext);
-        }
+
         this.events = _.chain(events)
             .map(x => this.convertEvent(addAbsolutePosition(x)))
             .filter(x => !!x)
             .value();
-    }
-
-    private getInstrument(event: IMidiEvent) {
-        if (event.channel === percussionMidiChannel) {
-            return this.percussion;
-        }
-        if (!this.instruments.has(event.track)) {
-            const newInstrument = new Instrument(this.audioContext);
-            this.instruments.set(event.track, newInstrument);
-        }
-        return this.instruments.get(event.track);
-    }
-
-    private noteOn(event: IMidiEvent, offset: number) {
-        const instrument = this.getInstrument(event);
-        instrument.noteOn(event, offset);
-    }
-
-    private noteOff(event: IMidiEvent, offset: number) {
-        const instrument = this.getInstrument(event);
-        instrument.noteOff(this.audioBuffer, event, offset);
-    }
-
-    private controllerChange(event: IMidiEvent) {
-        const instrument = this.getInstrument(event);
-        instrument.controllerChange(event);
-    }
-
-    private programChange(event: IMidiEvent) {
-        if (event.channel === percussionMidiChannel) {
-            return;
-        }
-        const instrumentName = GetInstrumentNameForPc(event.param1);
-        const instrument = this.getInstrument(event);
-        instrument.setInstrument(instrumentName);
-    }
-
-    private pitchBend(event: IMidiEvent) {
-        const instrument = this.getInstrument(event);
-        instrument.pitchBend(event);
     }
 
     public async load(base64Data: string) {
@@ -196,25 +134,6 @@ export class WerckmeisterMidiPlayer {
         await this.preprocessEvents(this.midifile.getEvents());
     }
 
-    private async render() {
-        return new Promise<void>(resolve => {
-            setTimeout(() => {
-                for(let i=0; i<this.events.length; ++i) {
-                    const event = this.events[i];
-                    let eventTseconds = event.playTime / 1000;
-                    switch(event.type) {
-                        case MidiEventTypes.NoteOn: this.noteOn(event, eventTseconds); break;
-                        case MidiEventTypes.NoteOff: this.noteOff(event, eventTseconds); break;
-                        case MidiEventTypes.Pc: this.programChange(event); break;
-                        case MidiEventTypes.Cc: this.controllerChange(event); break;
-                        case MidiEventTypes.PitchBend: this.pitchBend(event); break;
-                        //default: console.log(event.name); break;
-                    }
-                }
-                resolve();
-            });
-        });
-    }
 
     public async play() {
         if (!this.midifile || this.playerState > PlayerState.Stopped) {
@@ -224,13 +143,6 @@ export class WerckmeisterMidiPlayer {
         this.playerState = PlayerState.Preparing;
         try {
             const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-            this.audioBuffer = new AudioBuffer({length: songTimeSecs*SupportedSampleRate, sampleRate: SupportedSampleRate, numberOfChannels: 2})
-            await this.render();
-            this.playbackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
-            this.playbackNode.connect(this.audioContext.destination);
-            this.playbackNode.start();
-            this.playbackNode.onended = this.stop.bind(this);
-            this.playerState = PlayerState.Playing;
             this.startEventNotification();
         } catch {
             this.playerState = PlayerState.Stopped;
@@ -269,7 +181,6 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState === PlayerState.Stopped) {
             return;
         }
-        this.playbackNode.stop();
         this.playerState = PlayerState.Stopped;
     }
 
