@@ -1,11 +1,12 @@
 import * as _ from 'lodash';
 import { IMidiEvent, MidiEventTypes } from "./IMidiEvent";
-import { DefaultInstrument, GetInstrumentNameForPc } from "./GM";
 import * as MidiFileModule from "midifile";
 const MidiFile = (MidiFileModule as any).default;
 import * as MidiEvents from "midievents";
 import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
+import { IInstrument, SfCompose } from './SfCompose';
+import { SfRepository } from './SfRepository';
 
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 9;
@@ -17,15 +18,20 @@ export enum PlayerState {
     Playing,
 }
 
+const DefaultInstrument:IInstrument = null; //{bank: 0, preset: 0};
+
 export class WerckmeisterMidiPlayer {
     private _playerState: PlayerState = PlayerState.Stopped;
     playedTime: number = 0;
     midifile: any;
     private audioContext: AudioContext;
     private events: IMidiEvent[];
-    public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
-    public onMidiEvent: (event: IMidiEvent) => void = ()=>{};
-    
+    public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = () => { };
+    public onMidiEvent: (event: IMidiEvent) => void = () => { };
+    private sfComposer = new SfCompose();
+    private sfRepository = new SfRepository();
+    private neededInstruments: IInstrument[];
+
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
@@ -66,7 +72,7 @@ export class WerckmeisterMidiPlayer {
             param2: x.param2,
             absPositionTicks: x.absPositionTicks,
             playTime: x.playTime
-        });        
+        });
         const noteon = (x) => ({
             type: MidiEventTypes.NoteOn,
             noteName: Constants.NOTES[x.param1],
@@ -94,11 +100,11 @@ export class WerckmeisterMidiPlayer {
             param1: x.param1,
             param2: x.param2,
             absPositionTicks: x.absPositionTicks,
-            pitchbendValue: x.param2*128 + x.param1,
+            pitchbendValue: x.param2 * 128 + x.param1,
             playTime: x.playTime
-        });        
+        });
         if (event.type === MidiEvents.EVENT_MIDI) {
-            switch(event.subtype) {
+            switch (event.subtype) {
                 case MidiEvents.EVENT_MIDI_PROGRAM_CHANGE: return pc(event);
                 case MidiEvents.EVENT_MIDI_CONTROLLER: return cc(event);
                 case MidiEvents.EVENT_MIDI_NOTE_ON: return noteon(event);
@@ -110,17 +116,32 @@ export class WerckmeisterMidiPlayer {
     }
 
     private async preprocessEvents(events) {
-        const absolutePositions:number[] = [];
+        const absolutePositions: number[] = [];
         const addAbsolutePosition = (x: any) => {
             const trackId = x.track || 0;
             let pos = absolutePositions[trackId] || 0;
             // for some reason the delta value in x is not correct, so we fetch it via getTrackEvents()
-            const trackEvents:any[] = this.midifile.getTrackEvents(trackId);
+            const trackEvents: any[] = this.midifile.getTrackEvents(trackId);
             const delta = (trackEvents.find(tev => tev.index === x.index)).delta || 0;
             x.absPositionTicks = pos + delta;
             absolutePositions[trackId] = x.absPositionTicks;
             return x;
         };
+        this.neededInstruments = _.chain(events)
+            .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
+            .map(x => { return {bank:0, preset: x.param1 as number} })
+            .concat([DefaultInstrument])
+            .filter(x => !!x)
+            .uniqBy(x => `${x.bank}-${x.preset}`)
+            .value();
+        
+        const needsPercussion = _.chain(events)
+            .some(x => x.channel === percussionMidiChannel)
+            .value();
+
+        if (needsPercussion) {
+            // TODO: neededInstruments.push();
+        }
 
         this.events = _.chain(events)
             .map(x => this.convertEvent(addAbsolutePosition(x)))
@@ -132,6 +153,11 @@ export class WerckmeisterMidiPlayer {
         const bff = Base64Binary.decodeArrayBuffer(base64Data);
         this.midifile = new MidiFile(bff);
         await this.preprocessEvents(this.midifile.getEvents());
+        const skeleton = await this.sfRepository.getSkeleton();
+        const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, this.neededInstruments);
+        const samples = await this.sfRepository.getSampleFiles(requiredSampleIds);
+        await this.sfComposer.writeSamples(samples);
+        await this.sfComposer.compose(skeleton.sfName, this.neededInstruments);
     }
 
 
@@ -142,8 +168,9 @@ export class WerckmeisterMidiPlayer {
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         try {
-            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-            this.startEventNotification();
+            // const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+            // this.startEventNotification();
+
         } catch {
             this.playerState = PlayerState.Stopped;
         }
@@ -161,7 +188,7 @@ export class WerckmeisterMidiPlayer {
             if (this.playerState !== PlayerState.Playing) {
                 clearInterval(intervalId);
             }
-            while(true) {
+            while (true) {
                 const event = this.events[eventIndex];
                 if (event.playTime > t) {
                     break;

@@ -10,6 +10,12 @@
     "build": "parcel build --no-source-maps src/WerckmeisterMidiPlayer.ts -o index.js",
     "dev": "parcel test.html"
   },
+  "staticFiles": {
+    "staticPath": [
+      "./node_modules/@werckmeister/sfcompose"
+    ],
+    "watcherGlob": "*.wasm"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/werckme/midiplayer.git"
@@ -30,9 +36,10 @@
   },
   "dependencies": {
     "@types/lodash": "^4.14.165",
-    "lodash": "^4.17.20",
-    "midifile": "^2.0.0",
+    "@werckmeister/sfcompose": "1.0.0-dev-20",
     "babel-core": "^6.26.3",
-    "babel-polyfill": "^6.26.0"
+    "babel-polyfill": "^6.26.0",
+    "lodash": "^4.17.20",
+    "midifile": "^2.0.0"
   }
 }
