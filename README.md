@@ -14,3 +14,13 @@
 * Pitch Bend
 * Meta Events
   * Tempo
+
+# TODO
+prepare js-synthesizer
+```
+cp ../node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js .
+cp ../node_modules/js-synthesizer/dist/js-synthesizer.js .
+cat libfluidsynth-2.0.2.js > main.js
+cat js-synthesizer.js >> main.js
+
+```

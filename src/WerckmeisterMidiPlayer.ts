@@ -7,6 +7,7 @@ import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
 import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
+import * as JSSynth from 'poc';
 
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 9;
@@ -31,8 +32,9 @@ export class WerckmeisterMidiPlayer {
     private sfComposer = new SfCompose();
     private sfRepository = new SfRepository();
     private neededInstruments: IInstrument[];
+    private midiBuffer: Uint8Array;
     public soundFont: ISoundFont;
-
+    private synth;
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
@@ -50,10 +52,12 @@ export class WerckmeisterMidiPlayer {
     }
 
     public initAudioEnvironment(event: Event) {
-        // if (this.audioContext) {
-        //     return;
-        // }
-        // this.audioContext = new AudioContext({sampleRate: SupportedSampleRate});
+        if (this.audioContext) {
+            return;
+        }
+        this.audioContext = new AudioContext();
+        this.synth = new JSSynth.Synthesizer();
+        this.synth.init(this.audioContext.sampleRate);
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -141,7 +145,7 @@ export class WerckmeisterMidiPlayer {
             .value();
 
         if (needsPercussion) {
-            // TODO: neededInstruments.push();
+           this.neededInstruments.push({bank: 128, preset: 0});
         }
 
         this.events = _.chain(events)
@@ -151,15 +155,14 @@ export class WerckmeisterMidiPlayer {
     }
 
     public async load(base64Data: string) {
-        const bff = Base64Binary.decodeArrayBuffer(base64Data);
-        this.midifile = new MidiFile(bff);
+        this.midiBuffer = Base64Binary.decodeArrayBuffer(base64Data);
+        this.midifile = new MidiFile(this.midiBuffer);
         await this.preprocessEvents(this.midifile.getEvents());
         const skeleton = await this.sfRepository.getSkeleton();
         const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, this.neededInstruments);
         const samples = await this.sfRepository.getSampleFiles(requiredSampleIds);
         await this.sfComposer.writeSamples(samples);
         this.soundFont = await this.sfComposer.compose(skeleton.sfName, this.neededInstruments);
-        this.download(this.soundFont);
     }
 
     public download(soundFont: ISoundFont) {
@@ -179,6 +182,22 @@ export class WerckmeisterMidiPlayer {
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         try {
+            // Create AudioNode (ScriptProcessorNode) to output audio data
+            const node = this.synth.createAudioNode(this.audioContext, 8192); // 8192 is the frame count of buffer
+            console.log("node created");  
+            node.connect(this.audioContext.destination);
+            // Load your SoundFont data (sfontBuffer: ArrayBuffer)
+            await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
+            console.log("font loaded");            
+            await this.synth.addSMFDataToPlayer(this.midiBuffer);
+            console.log("smf file added");
+            await this.synth.playPlayer();
+            console.log("player started");
+            await this.synth.waitForPlayerStopped();
+            await this.synth.waitForVoicesStopped();
+            this.synth.close();
+            node.disconnect();
+            console.log("done");
             // const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
             // this.startEventNotification();
 

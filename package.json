@@ -39,7 +39,9 @@
     "@werckmeister/sfcompose": "1.0.0-dev-20",
     "babel-core": "^6.26.3",
     "babel-polyfill": "^6.26.0",
+    "js-synthbuild": "file:poc/dist",
     "lodash": "^4.17.20",
-    "midifile": "^2.0.0"
+    "midifile": "^2.0.0",
+    "poc": "file:poc/dist"
   }
 }
