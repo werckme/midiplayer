@@ -5,7 +5,7 @@ const MidiFile = (MidiFileModule as any).default;
 import * as MidiEvents from "midievents";
 import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
-import { IInstrument, SfCompose } from './SfCompose';
+import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
 
 const percussionInstrumentName = "percussion";
@@ -31,6 +31,7 @@ export class WerckmeisterMidiPlayer {
     private sfComposer = new SfCompose();
     private sfRepository = new SfRepository();
     private neededInstruments: IInstrument[];
+    public soundFont: ISoundFont;
 
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
@@ -157,9 +158,19 @@ export class WerckmeisterMidiPlayer {
         const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, this.neededInstruments);
         const samples = await this.sfRepository.getSampleFiles(requiredSampleIds);
         await this.sfComposer.writeSamples(samples);
-        await this.sfComposer.compose(skeleton.sfName, this.neededInstruments);
+        this.soundFont = await this.sfComposer.compose(skeleton.sfName, this.neededInstruments);
+        this.download(this.soundFont);
     }
 
+    public download(soundFont: ISoundFont) {
+        const url = window.URL.createObjectURL(soundFont.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = soundFont.sfName + ".sf2";
+        document.body.appendChild(a); // we need to append the element to the dom -> otherwise it will not work in firefox
+        a.click();    
+        a.remove(); 
+    }
 
     public async play() {
         if (!this.midifile || this.playerState > PlayerState.Stopped) {

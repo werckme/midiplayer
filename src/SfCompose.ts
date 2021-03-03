@@ -19,13 +19,19 @@ export interface ISampleFile {
     data: Blob;
 }
 
+export interface ISoundFont {
+    sfName: string;
+    instruments: IInstrument[];
+    data: Blob;
+}
 
 interface SfComposeModule {
     cwrap: (name: string, returnType: string, args: any[]) => CallableFunction;
     _free: (ptr: number) => void;
     UTF8ToString: (strPtr: number) => string;
     FS: {
-        writeFile: (path: string, data: string|ArrayBufferView, opts?: {flags?: string, encoding?: string}) => void,
+        writeFile: (path: string, data: string|ArrayBufferView, opts?: {flags?: string}) => void,
+        readFile(path: string, opts?: {flags?: string, encoding?: string})
         analyzePath: (path: string, dontResolveLastLink: boolean) => {
             isRoot: boolean,
             exists: boolean,
@@ -82,7 +88,7 @@ export class SfCompose {
         return res.exists;
     }
 
-    public async writeSamples(samples: ISampleFile[]) {
+    public async writeSamples(samples: ISampleFile[]): Promise<void> {
         const module = await this.module;
         for(const sample of samples) {
             const bff = await sample.data.arrayBuffer();
@@ -91,7 +97,7 @@ export class SfCompose {
         }
     }
 
-    public async getRequiredSampleIds(skeleton: ISkeletonFile, instruments:IInstrument[]) {
+    public async getRequiredSampleIds(skeleton: ISkeletonFile, instruments:IInstrument[]): Promise<number[]> {
         const module = await this.module;
         if (await this.dirExists(skeleton.sfName) === false) {
             if (skeleton.sfName.indexOf('/') >= 0) {
@@ -122,7 +128,7 @@ export class SfCompose {
         }
     }
 
-    public async compose(sfName: string, instruments:IInstrument[]) {
+    public async compose(sfName: string, instruments:IInstrument[]): Promise<ISoundFont> {
         const module = await this.module;
         if (await this.dirExists(sfName) === false) {
            throw new Error("sfcompose: missing data for " + sfName);
@@ -132,12 +138,11 @@ export class SfCompose {
         // execute
         let strPtr: number = 0;
         const instrumentIds = instruments.map(x => `${x.bank} ${x.preset}`).join(" ");
-        const samplePathTemplate = '_.';
+        const samplePathTemplate = '_';
         const outFile = `${sfName}.sf2`
         const pathToSamples = sfName;
         const args = `${skeletonPath} ${pathToSamples} ${samplePathTemplate} ${outFile} ${instrumentIds}`;
         strPtr = this.performCompose(args);
-        console.log(module.FS.analyzePath(outFile, true));
         const resultStr = module.UTF8ToString(strPtr);
         module._free(strPtr);
         let json:any = {};
@@ -149,6 +154,16 @@ export class SfCompose {
         if (json.error) {
             throw new Error("sfcompose: " + json.error);
         }
-        
+        try {
+            const data:Uint8Array = module.FS.readFile(outFile);
+            const blob = new Blob([data], {type: 'application/octet-stream'});
+            return {
+                data: blob,
+                instruments,
+                sfName
+            };
+        } catch {
+            throw new Error("failed to read result");
+        }
     }
 }
