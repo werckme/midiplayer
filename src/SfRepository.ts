@@ -22,17 +22,23 @@ export class SfRepository {
     }
 
     public async getSampleFiles(sampleIds: number[]): Promise<ISampleFile[]> {
-        const result: ISampleFile[] = [];
+        const _fetch = async (id, url) => {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return {id, blob};
+        }
+        const fetches: Promise<{id: number, blob: Blob}>[] = [];
+
         for(const id of sampleIds) {
             const url = `${this.baseUrl}/${this.sampleTemplate.replace('$id', id.toString())}`
-            const response = await fetch(url);
-            const data = await response.blob();
-            result.push({
-                sfName: this.sfName,
-                id: id,
-                data
-            });
+            fetches.push(_fetch(id, url));
         }
-        return result;
+        const blobs = await Promise.all(fetches);
+        return blobs
+            .map(x => ({
+                sfName: this.sfName,
+                id: x.id,
+                data: x.blob
+            }));
     }
 }
