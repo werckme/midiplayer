@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 14     
       - name: prepare
-        run: npm install
+        run: npm install && npm run install-jssynth
       - name: build
         run: npm run deploy
       - uses: actions/upload-artifact@v2
