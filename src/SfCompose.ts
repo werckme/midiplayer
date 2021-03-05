@@ -97,6 +97,15 @@ export class SfCompose {
         }
     }
 
+    private filterExistingSamples(module:SfComposeModule, skeleton: ISkeletonFile, sampleIds: number[]) {
+        const sampleExists = (sampleid) => {
+            const pathToSamples = skeleton.sfName;
+            const stat = module.FS.analyzePath(`${pathToSamples}/_${sampleid}.smpl`, true);
+            return stat.exists;
+        }
+        return sampleIds.filter(id => !sampleExists(id));
+    } 
+
     public async getRequiredSampleIds(skeleton: ISkeletonFile, instruments:IInstrument[]): Promise<number[]> {
         const module = await this.module;
         if (await this.dirExists(skeleton.sfName) === false) {
@@ -121,7 +130,8 @@ export class SfCompose {
             throw new Error("sfcompose: failed to parse result: " + resultStr);
         }
         if (Array.isArray(json)) {
-            return json.filter(x => !!x && x>=0); // TODO for some reason we have -1 in here
+            const sampleIds = json.filter(x => !!x && x>=0); // TODO for some reason we have -1 in here
+            return this.filterExistingSamples(module, skeleton, sampleIds);
         }
         if (json.error) {
             throw new Error("sfcompose: " + json.error);

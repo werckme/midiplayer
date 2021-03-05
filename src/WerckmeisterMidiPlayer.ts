@@ -7,8 +7,8 @@ import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
 import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
-import * as JSSynth from 'poc';
-
+import * as JSSynth from 'js-synthbuild';
+// https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
@@ -34,6 +34,7 @@ export class WerckmeisterMidiPlayer {
     private neededInstruments: IInstrument[];
     private midiBuffer: Uint8Array;
     public soundFont: ISoundFont;
+    private soundFontHash: string;
     private synth;
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
@@ -52,12 +53,13 @@ export class WerckmeisterMidiPlayer {
     }
 
     public initAudioEnvironment(event: Event) {
-        if (this.audioContext) {
-            return;
+        if (!this.audioContext) {
+            this.audioContext = new AudioContext();
         }
-        this.audioContext = new AudioContext();
-        this.synth = new JSSynth.Synthesizer();
-        this.synth.init(this.audioContext.sampleRate);
+        if (!this.synth) {
+            this.synth = new JSSynth.Synthesizer();
+            this.synth.init(this.audioContext.sampleRate);
+        }
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -154,15 +156,37 @@ export class WerckmeisterMidiPlayer {
             .value();
     }
 
+    private instrumentHash(instrument: IInstrument): string {
+        return `${instrument.bank}-${instrument.preset}`;
+    }
+
+    private instrumentsHash(instruments: IInstrument[]): string {
+        return instruments
+            .map(i => this.instrumentHash(i))
+            .sort()
+            .join(",");
+    }
+
+    private async getSoundfont(requiredInstruments: IInstrument[]): Promise<ISoundFont> {
+        const skeleton = await this.sfRepository.getSkeleton();
+        const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, requiredInstruments);
+        const samples = await this.sfRepository.getSampleFiles(requiredSampleIds);
+        await this.sfComposer.writeSamples(samples);
+        const sf = await this.sfComposer.compose(skeleton.sfName, requiredInstruments);
+        return sf;
+
+    }
+
     public async load(base64Data: string) {
         this.midiBuffer = Base64Binary.decodeArrayBuffer(base64Data);
         this.midifile = new MidiFile(this.midiBuffer);
         await this.preprocessEvents(this.midifile.getEvents());
-        const skeleton = await this.sfRepository.getSkeleton();
-        const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, this.neededInstruments);
-        const samples = await this.sfRepository.getSampleFiles(requiredSampleIds);
-        await this.sfComposer.writeSamples(samples);
-        this.soundFont = await this.sfComposer.compose(skeleton.sfName, this.neededInstruments);
+        const soundFontHash = this.instrumentsHash(this.neededInstruments);
+        if (soundFontHash === this.soundFontHash) {
+            return;
+        }
+        this.soundFont = await this.getSoundfont(this.neededInstruments);
+        this.soundFontHash = soundFontHash;
     }
 
     public download(soundFont: ISoundFont) {
@@ -170,7 +194,7 @@ export class WerckmeisterMidiPlayer {
         const a = document.createElement('a');
         a.href = url;
         a.download = soundFont.sfName + ".sf2";
-        document.body.appendChild(a); // we need to append the element to the dom -> otherwise it will not work in firefox
+        document.body.appendChild(a);
         a.click();    
         a.remove(); 
     }
@@ -182,26 +206,19 @@ export class WerckmeisterMidiPlayer {
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         try {
-            // Create AudioNode (ScriptProcessorNode) to output audio data
+            this.synth.resetPlayer();
             const node = this.synth.createAudioNode(this.audioContext, 8192); // 8192 is the frame count of buffer
-            console.log("node created");  
             node.connect(this.audioContext.destination);
-            // Load your SoundFont data (sfontBuffer: ArrayBuffer)
             await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
-            console.log("font loaded");            
             await this.synth.addSMFDataToPlayer(this.midiBuffer);
-            console.log("smf file added");
             await this.synth.playPlayer();
-            console.log("player started");
+            this.playerState = PlayerState.Playing;
+            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+            this.startEventNotification();
             await this.synth.waitForPlayerStopped();
             await this.synth.waitForVoicesStopped();
-            this.synth.close();
             node.disconnect();
-            console.log("done");
-            // const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-            // this.startEventNotification();
-
-        } catch {
+        } finally {
             this.playerState = PlayerState.Stopped;
         }
     }
@@ -238,6 +255,7 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState === PlayerState.Stopped) {
             return;
         }
+        this.synth.stopPlayer();
         this.playerState = PlayerState.Stopped;
     }
 

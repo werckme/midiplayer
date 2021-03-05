@@ -5,15 +5,20 @@ export class SfRepository {
     skeleton = "FluidR3_GM.sf2.skeleton";
     sampleTemplate = "FluidR3_GM.sf2.$id.smpl";
     sfName = "FluidR3_GM";
+    private skeletonFile: ISkeletonFile;
 
     public getUrl(path) {
         return `${this.baseUrl}/${path}`;
     }
 
     public async getSkeleton(): Promise<ISkeletonFile> {
+        if (this.skeletonFile) {
+            return this.skeletonFile;
+        }
         const response = await fetch(this.getUrl(this.skeleton));
         const data = await response.blob();
-        return { sfName: this.sfName, data };
+        this.skeletonFile = { sfName: this.sfName, data };
+        return this.skeletonFile;
     }
 
     public async getSampleFiles(sampleIds: number[]): Promise<ISampleFile[]> {
