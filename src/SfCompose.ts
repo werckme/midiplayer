@@ -130,7 +130,7 @@ export class SfCompose {
             throw new Error("sfcompose: failed to parse result: " + resultStr);
         }
         if (Array.isArray(json)) {
-            const sampleIds = json.filter(x => !!x && x>=0); // TODO for some reason we have -1 in here
+            const sampleIds = json;
             return this.filterExistingSamples(module, skeleton, sampleIds);
         }
         if (json.error) {

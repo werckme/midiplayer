@@ -186,6 +186,7 @@ export class WerckmeisterMidiPlayer {
             return;
         }
         this.soundFont = await this.getSoundfont(this.neededInstruments);
+        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
         this.soundFontHash = soundFontHash;
     }
 
@@ -199,6 +200,10 @@ export class WerckmeisterMidiPlayer {
         a.remove(); 
     }
 
+    private sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     public async play() {
         if (!this.midifile || this.playerState > PlayerState.Stopped) {
             return;
@@ -209,8 +214,9 @@ export class WerckmeisterMidiPlayer {
             this.synth.resetPlayer();
             const node = this.synth.createAudioNode(this.audioContext, 8192); // 8192 is the frame count of buffer
             node.connect(this.audioContext.destination);
-            await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
+           
             await this.synth.addSMFDataToPlayer(this.midiBuffer);
+            await this.sleep(200);
             await this.synth.playPlayer();
             this.playerState = PlayerState.Playing;
             const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
