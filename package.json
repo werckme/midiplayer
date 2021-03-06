@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@types/lodash": "^4.14.165",
-    "@werckmeister/sfcompose": "1.0.0-dev-20",
+    "@werckmeister/sfcompose": "1.0.0-dev-22",
     "babel-core": "^6.26.3",
     "babel-polyfill": "^6.26.0",
     "js-synthbuild": "file:jssynthbuild",
