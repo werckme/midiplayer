@@ -35,9 +35,7 @@
     "js-synthesizer": "^1.7.0",
     "parcel": "1.12.3",
     "parcel-plugin-static-files-copy": "2.5.0",
-    "typescript": "^4.1.3"
-  },
-  "dependencies": {
+    "typescript": "^4.1.3",
     "@types/lodash": "^4.14.165",
     "@werckmeister/sfcompose": "1.0.0-dev-22",
     "babel-core": "^6.26.3",
@@ -45,5 +43,8 @@
     "js-synthbuild": "file:jssynthbuild",
     "lodash": "^4.17.20",
     "midifile": "^2.0.0"
+  },
+  "dependencies": {
+
   }
 }
