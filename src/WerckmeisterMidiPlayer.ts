@@ -21,6 +21,25 @@ export enum PlayerState {
 
 const DefaultInstrument:IInstrument = null; //{bank: 0, preset: 0};
 
+let _lastSoundFont: ISoundFont;
+
+function downloadLastSoundFont() {
+    if (!_lastSoundFont) {
+        console.warn("wm midi no last soundfont");
+        return;
+    }
+    const soundFont = _lastSoundFont;
+    const url = window.URL.createObjectURL(soundFont.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = soundFont.sfName + ".sf2";
+    document.body.appendChild(a);
+    a.click();    
+    a.remove(); 
+}
+
+(window as any).__wmmididownloadlastsoundfont = downloadLastSoundFont;
+
 export class WerckmeisterMidiPlayer {
     private _playerState: PlayerState = PlayerState.Stopped;
     playedTime: number = 0;
@@ -186,18 +205,9 @@ export class WerckmeisterMidiPlayer {
             return;
         }
         this.soundFont = await this.getSoundfont(this.neededInstruments);
+        _lastSoundFont = this.soundFont;
         await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
         this.soundFontHash = soundFontHash;
-    }
-
-    public download(soundFont: ISoundFont) {
-        const url = window.URL.createObjectURL(soundFont.data);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = soundFont.sfName + ".sf2";
-        document.body.appendChild(a);
-        a.click();    
-        a.remove(); 
     }
 
     private sleep(ms: number): Promise<void> {
