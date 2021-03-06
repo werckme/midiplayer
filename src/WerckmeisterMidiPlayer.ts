@@ -210,24 +210,29 @@ export class WerckmeisterMidiPlayer {
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-        try {
-            this.synth.resetPlayer();
-            const node = this.synth.createAudioNode(this.audioContext, 8192); // 8192 is the frame count of buffer
-            node.connect(this.audioContext.destination);
-           
-            await this.synth.addSMFDataToPlayer(this.midiBuffer);
-            await this.sleep(200);
-            await this.synth.playPlayer();
-            this.playerState = PlayerState.Playing;
-            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-            this.startEventNotification();
-            await this.synth.waitForPlayerStopped();
-            await this.synth.waitForVoicesStopped();
-            node.disconnect();
-        } finally {
-            this.playerState = PlayerState.Stopped;
-        }
+        this.synth.resetPlayer();
+        const node = this.synth.createAudioNode(this.audioContext, 8192); // 8192 is the frame count of buffer
+        node.connect(this.audioContext.destination);
+        
+        await this.synth.addSMFDataToPlayer(this.midiBuffer);
+        await this.sleep(200);
+        await this.synth.playPlayer();
+        this.playerState = PlayerState.Playing;
+        const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+        this.startEventNotification();
+        this.waitUntilStopped(node);
     }
+
+    private async waitUntilStopped(node: AudioNode) {
+        await this.synth.waitForPlayerStopped();
+        await this.synth.waitForVoicesStopped();
+        const stopWasPressed = this.playerState === PlayerState.Stopped;
+        if (!stopWasPressed) {
+            await this.sleep(1000);
+        }
+        this.playerState = PlayerState.Stopped;
+        node.disconnect();
+    } 
 
     /**
      * fires the midi events parallel to the playback
