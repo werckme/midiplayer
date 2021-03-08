@@ -233,8 +233,8 @@ export class WerckmeisterMidiPlayer {
         this.startEventNotification();
         this.playerState = PlayerState.Playing;
         const context = this.audioContext;
-        await context.audioWorklet.addModule('libfluidsynth-2.0.2.js');
-        await context.audioWorklet.addModule('js-synthesizer.worklet.js');
+        await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/libfluidsynth-2.0.2.js');
+        await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/js-synthesizer.worklet.js');
         this.synth = new JSSynth.AudioWorkletNodeSynthesizer();
         this.synth.init(context.sampleRate);
         const audioNode = this.synth.createAudioNode(context);
