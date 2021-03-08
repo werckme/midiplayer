@@ -9,10 +9,10 @@ import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
 import * as JSSynth from 'js-synthbuild';
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
-const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
-const AudioBufferSize = 1024;
+const DefaultAudioBufferSize = 512;
+const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/feature/splitandcompose/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
 
 export enum PlayerState {
     Stopped,
@@ -51,14 +51,24 @@ export class WerckmeisterMidiPlayer {
     public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = () => { };
     public onMidiEvent: (event: IMidiEvent) => void = () => { };
     private sfComposer = new SfCompose();
-    private sfRepository = new SfRepository();
+    private _sfRepository = null;
     private neededInstruments: IInstrument[];
     private midiBuffer: Uint8Array;
     public soundFont: ISoundFont;
+    public bufferSize = DefaultAudioBufferSize;
     private soundFontHash: string;
     private synth;
+    private repoUrl = DefaultRepoUrl;
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
+    }
+
+    private async getSfRepository() {
+        if (!this._sfRepository) {
+            this._sfRepository = new SfRepository();
+            await this._sfRepository.setRepo(this.repoUrl);
+        }
+        return this._sfRepository;
     }
 
     public get playerState(): PlayerState {
@@ -192,9 +202,10 @@ export class WerckmeisterMidiPlayer {
     }
 
     private async getSoundfont(requiredInstruments: IInstrument[]): Promise<ISoundFont> {
-        const skeleton = await this.sfRepository.getSkeleton();
+        const sfRepository = await this.getSfRepository();
+        const skeleton = await sfRepository.getSkeleton();
         const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, requiredInstruments);
-        const samples = await this.sfRepository.getSampleFiles(requiredSampleIds);
+        const samples = await sfRepository.getSampleFiles(requiredSampleIds);
         await this.sfComposer.writeSamples(samples);
         const sf = await this.sfComposer.compose(skeleton.sfName, requiredInstruments);
         return sf;
@@ -226,16 +237,21 @@ export class WerckmeisterMidiPlayer {
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         this.synth.resetPlayer();
-        const node = this.synth.createAudioNode(this.audioContext, AudioBufferSize);
+        const node = this.synth.createAudioNode(this.audioContext, this.bufferSize);
         node.connect(this.audioContext.destination);
         
         await this.synth.addSMFDataToPlayer(this.midiBuffer);
         await this.sleep(200);
+        this.startEventNotification();
         await this.synth.playPlayer();
         this.playerState = PlayerState.Playing;
         const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-        this.startEventNotification();
         this.waitUntilStopped(node);
+    }
+
+    public setRepoUrl(url: string) {
+        this.repoUrl = url;
+        this._sfRepository = null;
     }
 
     private async waitUntilStopped(node: AudioNode) {
