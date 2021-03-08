@@ -87,10 +87,10 @@ export class WerckmeisterMidiPlayer {
         if (!this.audioContext) {
             this.audioContext = new AudioContext();
         }
-        if (!this.synth) {
-            this.synth = new JSSynth.Synthesizer();
-            this.synth.init(this.audioContext.sampleRate);
-        }
+        // if (!this.synth) {
+        //     this.synth = new JSSynth.Synthesizer();
+        //     this.synth.init(this.audioContext.sampleRate);
+        // }
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -222,7 +222,6 @@ export class WerckmeisterMidiPlayer {
         }
         this.soundFont = await this.getSoundfont(this.neededInstruments);
         _lastSoundFont = this.soundFont;
-        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
         this.soundFontHash = soundFontHash;
     }
 
@@ -236,17 +235,20 @@ export class WerckmeisterMidiPlayer {
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-        this.synth.resetPlayer();
-        const node = this.synth.createAudioNode(this.audioContext, this.bufferSize);
-        node.connect(this.audioContext.destination);
-        
-        await this.synth.addSMFDataToPlayer(this.midiBuffer);
-        await this.sleep(200);
         this.startEventNotification();
-        await this.synth.playPlayer();
         this.playerState = PlayerState.Playing;
-        const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-        this.waitUntilStopped(node);
+        // const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+        const context = this.audioContext;
+        await context.audioWorklet.addModule('https://unpkg.com/js-synthesizer@1.7.0/externals/libfluidsynth-2.0.2.js');
+        await context.audioWorklet.addModule('https://unpkg.com/js-synthesizer@1.7.0/dist/js-synthesizer.worklet.js');
+        this.synth = new JSSynth.AudioWorkletNodeSynthesizer();
+        this.synth.init(context.sampleRate);
+        const audioNode = this.synth.createAudioNode(context);
+        audioNode.connect(context.destination);
+        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
+        await this.synth.addSMFDataToPlayer(this.midiBuffer);   
+        this.synth.playPlayer();     
+        this.waitUntilStopped(audioNode);
     }
 
     public setRepoUrl(url: string) {

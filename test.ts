@@ -15,9 +15,10 @@ function log(str:string) {
     out.innerHTML += `<li>${str}</li>`
 }
 
+
 werckmeisterMidiPlayer.onMidiEvent = (event: IMidiEvent) => {
     if (event.type !== MidiEventTypes.Pc) {
-        //log(`♪ ${event.param1}`);   
+        log(`♪ ${event.param1}`);
         return;
     }
     log(`use instrument ${InstrumentNames[event.param1]}`);   
@@ -39,7 +40,7 @@ werckmeisterMidiPlayer.onPlayerStateChanged = (oldState: PlayerState, newState: 
 los.onclick = async (ev: Event) => {
     log("play pressed")
     werckmeisterMidiPlayer.initAudioEnvironment(ev);
-    await werckmeisterMidiPlayer.load(blackpages);
+    await werckmeisterMidiPlayer.load(c9);
     werckmeisterMidiPlayer.play();
 }
 
