@@ -228,9 +228,11 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState > PlayerState.Stopped) {
             return;
         }
+        if (this.synth) {
+            this.synth.resetPlayer();
+        }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-        this.startEventNotification();
         this.playerState = PlayerState.Playing;
         const context = this.audioContext;
         await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/libfluidsynth-2.0.2.js');
@@ -241,7 +243,8 @@ export class WerckmeisterMidiPlayer {
         audioNode.connect(context.destination);
         await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
         await this.synth.addSMFDataToPlayer(this.midiBuffer);   
-        this.synth.playPlayer();     
+        await this.synth.playPlayer();
+        this.startEventNotification();
         this.waitUntilStopped(audioNode);
     }
 
