@@ -12,6 +12,7 @@ import * as JSSynth from 'js-synthbuild';
 const percussionInstrumentName = "percussion";
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
+const AudioBufferSize = 1024;
 
 export enum PlayerState {
     Stopped,
@@ -19,7 +20,8 @@ export enum PlayerState {
     Playing,
 }
 
-const DefaultInstrument:IInstrument = null; //{bank: 0, preset: 0};
+const DefaultInstrument:IInstrument = {bank: 0, preset: 0};
+const DefaultPercussionInstrument:IInstrument = {bank: 128, preset: 0};
 
 let _lastSoundFont: ISoundFont;
 
@@ -156,7 +158,6 @@ export class WerckmeisterMidiPlayer {
         this.neededInstruments = _.chain(events)
             .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
             .map(x => { return {bank:0, preset: x.param1 as number} })
-            .concat([DefaultInstrument])
             .filter(x => !!x)
             .uniqBy(x => `${x.bank}-${x.preset}`)
             .value();
@@ -166,7 +167,11 @@ export class WerckmeisterMidiPlayer {
             .value();
 
         if (needsPercussion) {
-           this.neededInstruments.push({bank: 128, preset: 0});
+           this.neededInstruments.push(DefaultPercussionInstrument);
+        }
+
+        if (this.neededInstruments.length === 0) {
+            this.neededInstruments.push(DefaultInstrument);
         }
 
         this.events = _.chain(events)
@@ -221,7 +226,7 @@ export class WerckmeisterMidiPlayer {
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
         this.synth.resetPlayer();
-        const node = this.synth.createAudioNode(this.audioContext, 8192); // 8192 is the frame count of buffer
+        const node = this.synth.createAudioNode(this.audioContext, AudioBufferSize);
         node.connect(this.audioContext.destination);
         
         await this.synth.addSMFDataToPlayer(this.midiBuffer);
