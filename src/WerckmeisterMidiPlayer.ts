@@ -8,10 +8,10 @@ import { Constants } from './Constants';
 import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
 import * as JSSynth from 'js-synthbuild';
+
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
-const DefaultAudioBufferSize = 512;
 const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/feature/splitandcompose/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
 
 export enum PlayerState {
@@ -55,7 +55,6 @@ export class WerckmeisterMidiPlayer {
     private neededInstruments: IInstrument[];
     private midiBuffer: Uint8Array;
     public soundFont: ISoundFont;
-    public bufferSize = DefaultAudioBufferSize;
     private soundFontHash: string;
     private synth;
     private repoUrl = DefaultRepoUrl;
@@ -87,10 +86,6 @@ export class WerckmeisterMidiPlayer {
         if (!this.audioContext) {
             this.audioContext = new AudioContext();
         }
-        // if (!this.synth) {
-        //     this.synth = new JSSynth.Synthesizer();
-        //     this.synth.init(this.audioContext.sampleRate);
-        // }
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -237,10 +232,9 @@ export class WerckmeisterMidiPlayer {
         this.playerState = PlayerState.Preparing;
         this.startEventNotification();
         this.playerState = PlayerState.Playing;
-        // const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
         const context = this.audioContext;
-        await context.audioWorklet.addModule('https://unpkg.com/js-synthesizer@1.7.0/externals/libfluidsynth-2.0.2.js');
-        await context.audioWorklet.addModule('https://unpkg.com/js-synthesizer@1.7.0/dist/js-synthesizer.worklet.js');
+        await context.audioWorklet.addModule('libfluidsynth-2.0.2.js');
+        await context.audioWorklet.addModule('js-synthesizer.worklet.js');
         this.synth = new JSSynth.AudioWorkletNodeSynthesizer();
         this.synth.init(context.sampleRate);
         const audioNode = this.synth.createAudioNode(context);
