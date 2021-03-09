@@ -12,7 +12,7 @@ import * as JSSynth from 'js-synthbuild';
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
-const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/feature/splitandcompose/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
+const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.1/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
 
 export enum PlayerState {
     Stopped,
@@ -239,7 +239,7 @@ export class WerckmeisterMidiPlayer {
         await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/js-synthesizer.worklet.js');
         this.synth = new JSSynth.AudioWorkletNodeSynthesizer();
         this.synth.init(context.sampleRate);
-        const audioNode = this.synth.createAudioNode(context);
+        const audioNode = this.synth.createAudioNode(context, 8192);
         audioNode.connect(context.destination);
         await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
         await this.synth.addSMFDataToPlayer(this.midiBuffer);   
