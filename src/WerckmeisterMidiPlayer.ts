@@ -21,7 +21,6 @@ export enum PlayerState {
 }
 
 const DefaultInstrument:IInstrument = {bank: 0, preset: 0};
-const DefaultPercussionInstrument:IInstrument = {bank: 128, preset: 0};
 
 let _lastSoundFont: ISoundFont;
 
@@ -162,19 +161,17 @@ export class WerckmeisterMidiPlayer {
         };
         this.neededInstruments = _.chain(events)
             .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
-            .map(x => { return {bank:0, preset: x.param1 as number} })
+            .map(x => { 
+                let bank = 0;
+                if (x.channel === percussionMidiChannel) {
+                    bank = 128;
+                }
+                return {bank, preset: x.param1 as number} 
+            })
             .filter(x => !!x)
             .uniqBy(x => `${x.bank}-${x.preset}`)
             .value();
         
-        const needsPercussion = _.chain(events)
-            .some(x => x.channel === percussionMidiChannel)
-            .value();
-
-        if (needsPercussion) {
-           this.neededInstruments.push(DefaultPercussionInstrument);
-        }
-
         if (this.neededInstruments.length === 0) {
             this.neededInstruments.push(DefaultInstrument);
         }
