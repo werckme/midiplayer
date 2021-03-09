@@ -12,7 +12,7 @@ import * as JSSynth from 'js-synthbuild';
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
-const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/feature/splitandcompose/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
+const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.1/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
 
 export enum PlayerState {
     Stopped,
@@ -58,6 +58,8 @@ export class WerckmeisterMidiPlayer {
     private soundFontHash: string;
     private synth;
     private repoUrl = DefaultRepoUrl;
+    private audioBuffer: AudioBuffer;
+    private playblackNode: AudioBufferSourceNode;
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
@@ -85,6 +87,10 @@ export class WerckmeisterMidiPlayer {
     public initAudioEnvironment(event: Event) {
         if (!this.audioContext) {
             this.audioContext = new AudioContext();
+        }
+        if (!this.synth) {
+            this.synth = new JSSynth.Synthesizer();
+            this.synth.init(this.audioContext.sampleRate);
         }
     }
 
@@ -216,6 +222,7 @@ export class WerckmeisterMidiPlayer {
             return;
         }
         this.soundFont = await this.getSoundfont(this.neededInstruments);
+        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
         _lastSoundFont = this.soundFont;
         this.soundFontHash = soundFontHash;
     }
@@ -233,36 +240,37 @@ export class WerckmeisterMidiPlayer {
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
+        this.synth.resetPlayer();
+        
+        await this.synth.addSMFDataToPlayer(this.midiBuffer);
+
         this.playerState = PlayerState.Playing;
-        const context = this.audioContext;
-        await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/libfluidsynth-2.0.2.js');
-        await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/js-synthesizer.worklet.js');
-        this.synth = new JSSynth.AudioWorkletNodeSynthesizer();
-        this.synth.init(context.sampleRate);
-        const audioNode = this.synth.createAudioNode(context);
-        audioNode.connect(context.destination);
-        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
-        await this.synth.addSMFDataToPlayer(this.midiBuffer);   
+        
+        const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+        const sampleRate = this.audioContext.sampleRate;
+        this.audioBuffer = new AudioBuffer({length: songTimeSecs*sampleRate, sampleRate: sampleRate, numberOfChannels: 2})
         await this.synth.playPlayer();
+        console.log("start rendering");
+        await this.render(this.audioBuffer);
+        console.log("rendered")
         this.startEventNotification();
-        this.waitUntilStopped(audioNode);
+        this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
+        this.playblackNode.connect(this.audioContext.destination);
+        this.playblackNode.start();
+        this.playblackNode.onended = this.stop.bind(this);
+        this.playerState = PlayerState.Playing;
+        
+        //this.waitUntilStopped(node);
+    }
+
+    private render(audioBuffer: AudioBuffer) {
+        this.synth.render(audioBuffer);
     }
 
     public setRepoUrl(url: string) {
         this.repoUrl = url;
         this._sfRepository = null;
     }
-
-    private async waitUntilStopped(node: AudioNode) {
-        await this.synth.waitForPlayerStopped();
-        await this.synth.waitForVoicesStopped();
-        const stopWasPressed = this.playerState === PlayerState.Stopped;
-        if (!stopWasPressed) {
-            await this.sleep(1000);
-        }
-        this.playerState = PlayerState.Stopped;
-        node.disconnect();
-    } 
 
     /**
      * fires the midi events parallel to the playback
@@ -296,7 +304,7 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState === PlayerState.Stopped) {
             return;
         }
-        this.synth.stopPlayer();
+        this.playblackNode.stop();
         this.playerState = PlayerState.Stopped;
     }
 
