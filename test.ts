@@ -40,7 +40,7 @@ werckmeisterMidiPlayer.onPlayerStateChanged = (oldState: PlayerState, newState: 
 los.onclick = async (ev: Event) => {
     log("play pressed")
     werckmeisterMidiPlayer.initAudioEnvironment(ev);
-    await werckmeisterMidiPlayer.load(blackpages);
+    await werckmeisterMidiPlayer.load(c9);
     werckmeisterMidiPlayer.play();
 }
 

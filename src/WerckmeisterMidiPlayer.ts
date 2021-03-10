@@ -7,7 +7,6 @@ import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
 import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
-import * as JSSynth from 'js-synthbuild';
 
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
@@ -42,6 +41,9 @@ function downloadLastSoundFont() {
 
 (window as any).__wmmididownloadlastsoundfont = downloadLastSoundFont;
 
+const Webworker = new Worker("./FluidSynthWorker.js");
+
+
 export class WerckmeisterMidiPlayer {
     private _playerState: PlayerState = PlayerState.Stopped;
     playedTime: number = 0;
@@ -56,9 +58,7 @@ export class WerckmeisterMidiPlayer {
     private midiBuffer: Uint8Array;
     public soundFont: ISoundFont;
     private soundFontHash: string;
-    private synth;
     private repoUrl = DefaultRepoUrl;
-    private audioBuffer: AudioBuffer;
     private playblackNode: AudioBufferSourceNode;
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
@@ -87,10 +87,6 @@ export class WerckmeisterMidiPlayer {
     public initAudioEnvironment(event: Event) {
         if (!this.audioContext) {
             this.audioContext = new AudioContext();
-        }
-        if (!this.synth) {
-            this.synth = new JSSynth.Synthesizer();
-            this.synth.init(this.audioContext.sampleRate);
         }
     }
 
@@ -222,7 +218,7 @@ export class WerckmeisterMidiPlayer {
             return;
         }
         this.soundFont = await this.getSoundfont(this.neededInstruments);
-        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
+        
         _lastSoundFont = this.soundFont;
         this.soundFontHash = soundFontHash;
     }
@@ -235,38 +231,47 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState > PlayerState.Stopped) {
             return;
         }
-        if (this.synth) {
-            this.synth.resetPlayer();
-        }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-        this.synth.resetPlayer();
         
-        await this.synth.addSMFDataToPlayer(this.midiBuffer);
-
         this.playerState = PlayerState.Playing;
         
         const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
         const sampleRate = this.audioContext.sampleRate;
-        this.audioBuffer = new AudioBuffer({length: songTimeSecs*sampleRate, sampleRate: sampleRate, numberOfChannels: 2})
-        await this.synth.playPlayer();
+        const audioBuffer = new AudioBuffer({length: songTimeSecs*sampleRate, sampleRate: sampleRate, numberOfChannels: 2});
         console.log("start rendering");
-        await this.render(this.audioBuffer);
-        console.log("rendered")
+        await this.render(audioBuffer);
+        console.log("rendered", audioBuffer)
         this.startEventNotification();
-        this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
+        this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: audioBuffer});
         this.playblackNode.connect(this.audioContext.destination);
         this.playblackNode.start();
         this.playblackNode.onended = this.stop.bind(this);
         this.playerState = PlayerState.Playing;
-        
-        //this.waitUntilStopped(node);
     }
 
-    private render(audioBuffer: AudioBuffer) {
-        this.synth.render(audioBuffer);
+    private async render(audioBuffer: AudioBuffer) {
+        return new Promise<void>(async resolve => {
+            const sfData = await this.soundFont.data.arrayBuffer();
+            const onWorkerResponse = (msg) => {
+                // TODO: handle multiple instances
+                Webworker.removeEventListener('message', onWorkerResponse);
+                const bffL: ArrayBuffer = msg.data.bffL;
+                const bffR: ArrayBuffer = msg.data.bffR;
+                audioBuffer.copyToChannel(new Float32Array(msg.data.bffL), 0);
+                audioBuffer.copyToChannel(new Float32Array(msg.data.bffR), 1);
+                resolve();
+            };
+            Webworker.addEventListener('message', onWorkerResponse);
+    
+            Webworker.postMessage({
+                soundFont: sfData,
+                midiBuffer: this.midiBuffer,
+                audioBufferLength: audioBuffer.length
+            }); // TODO maybe transfering the data e.g.: [sfData, midiBuffer] is faster
+        });
     }
-
+    
     public setRepoUrl(url: string) {
         this.repoUrl = url;
         this._sfRepository = null;
@@ -305,6 +310,7 @@ export class WerckmeisterMidiPlayer {
             return;
         }
         this.playblackNode.stop();
+        this.playblackNode.disconnect(this.audioContext.destination);
         this.playerState = PlayerState.Stopped;
     }
 
