@@ -8,6 +8,13 @@ import { Constants } from './Constants';
 import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
 
+
+const fs = require('fs');
+// Read contents as a string
+const workerjs = fs.readFileSync('jssynthbuild/main.js', 'utf8');
+const workerUrl = `data:text/javascript;base64,${btoa(workerjs)}`;
+const webworker = new Worker(workerUrl);
+
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
@@ -41,8 +48,6 @@ function downloadLastSoundFont() {
 
 (window as any).__wmmididownloadlastsoundfont = downloadLastSoundFont;
 
-const Webworker = new Worker("./FluidSynthWorker.js");
-
 
 export class WerckmeisterMidiPlayer {
     private _playerState: PlayerState = PlayerState.Stopped;
@@ -59,7 +64,9 @@ export class WerckmeisterMidiPlayer {
     public soundFont: ISoundFont;
     private soundFontHash: string;
     private repoUrl = DefaultRepoUrl;
+    private audioNodes = new Map<number, AudioBufferSourceNode>();
     private playblackNode: AudioBufferSourceNode;
+    public rendererBlockSize = 44100*10;
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
@@ -223,7 +230,7 @@ export class WerckmeisterMidiPlayer {
         this.soundFontHash = soundFontHash;
     }
 
-    private sleep(ms: number): Promise<void> {
+    private sleepAsync(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
@@ -236,39 +243,65 @@ export class WerckmeisterMidiPlayer {
         
         this.playerState = PlayerState.Playing;
         
-        const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
         const sampleRate = this.audioContext.sampleRate;
-        const audioBuffer = new AudioBuffer({length: songTimeSecs*sampleRate, sampleRate: sampleRate, numberOfChannels: 2});
         console.log("start rendering");
-        await this.render(audioBuffer);
-        console.log("rendered", audioBuffer)
-        this.startEventNotification();
-        this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: audioBuffer});
-        this.playblackNode.connect(this.audioContext.destination);
-        this.playblackNode.start();
-        this.playblackNode.onended = this.stop.bind(this);
         this.playerState = PlayerState.Playing;
+        this.startPlayback().then(() => {
+            this.playerState = PlayerState.Stopped;
+        });
     }
 
-    private async render(audioBuffer: AudioBuffer) {
+    private async startPlayback() {
         return new Promise<void>(async resolve => {
             const sfData = await this.soundFont.data.arrayBuffer();
+            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+            let startTime = -1;
+            const sampleRate = this.audioContext.sampleRate;
+            let firstResponse = true;
+            let nodeId = 0;
+            this.audioNodes = new Map<number, AudioBufferSourceNode>();
+            const playNextBlock = (audioBlock: AudioBuffer, lastBlock: boolean) => {
+                const node = new AudioBufferSourceNode(this.audioContext, {buffer: audioBlock});
+                this.audioNodes.set(nodeId++, node);
+                node.connect(this.audioContext.destination);
+                node.start();
+                if (lastBlock) {
+                    node.onended = stop.bind(this);
+                }
+            }
+            const stop = () => {
+                webworker.removeEventListener('message', onWorkerResponse);
+                this.audioNodes.clear();
+                resolve();
+            }
             const onWorkerResponse = (msg) => {
-                // TODO: handle multiple instances
-                Webworker.removeEventListener('message', onWorkerResponse);
+                if (this.playerState !== PlayerState.Playing) {
+                    stop();
+                    return;                    
+                }
+                if (startTime < 0) {
+                    startTime = this.audioContext.currentTime;
+                    this.startEventNotification();
+                }
                 const bffL: ArrayBuffer = msg.data.bffL;
                 const bffR: ArrayBuffer = msg.data.bffR;
-                audioBuffer.copyToChannel(new Float32Array(msg.data.bffL), 0);
-                audioBuffer.copyToChannel(new Float32Array(msg.data.bffR), 1);
-                resolve();
+                const startPosSamples = msg.data.samplePos;
+                const playedSeconds = this.audioContext.currentTime - startTime;
+                const playedSamples = this.audioContext.sampleRate * playedSeconds;
+                const sampleOffset =  Math.floor(startPosSamples - playedSamples);
+                const audioBuffer = new AudioBuffer({length: msg.data.blockSize + sampleOffset, sampleRate: sampleRate, numberOfChannels: 2});
+                audioBuffer.copyToChannel(new Float32Array(msg.data.bffL), 0, sampleOffset);
+                audioBuffer.copyToChannel(new Float32Array(msg.data.bffR), 1, sampleOffset);
+                playNextBlock(audioBuffer, msg.data.lastBlock);
             };
-            Webworker.addEventListener('message', onWorkerResponse);
-    
-            Webworker.postMessage({
+            webworker.addEventListener('message', onWorkerResponse);
+            webworker.postMessage({
                 soundFont: sfData,
                 midiBuffer: this.midiBuffer,
-                audioBufferLength: audioBuffer.length
-            }); // TODO maybe transfering the data e.g.: [sfData, midiBuffer] is faster
+                audioBufferLength: songTimeSecs * sampleRate,
+                blockSize: this.rendererBlockSize,
+                sampleRate: this.audioContext.sampleRate
+            });
         });
     }
     
@@ -309,9 +342,13 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState === PlayerState.Stopped) {
             return;
         }
-        this.playblackNode.stop();
-        this.playblackNode.disconnect(this.audioContext.destination);
+        const nodeKeys = Array.from(this.audioNodes.keys());
+        for(const nodeKey of nodeKeys) {
+            const node = this.audioNodes.get(nodeKey);
+            node.stop();
+            node.disconnect(this.audioContext.destination);
+            this.audioNodes.delete(nodeKey);
+        }
         this.playerState = PlayerState.Stopped;
     }
-
 }

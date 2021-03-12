@@ -14,8 +14,7 @@
   "staticFiles": {
     "staticPath": [
       "./node_modules/@werckmeister/sfcompose",
-      "./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js",
-      "./node_modules/js-synthesizer/dist/js-synthesizer.worklet.js"
+      "./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js"
     ],
     "watcherGlob": "*.wasm"
   },
