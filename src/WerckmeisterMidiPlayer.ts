@@ -15,7 +15,6 @@ const libfluidsynth = fs.readFileSync('./node_modules/js-synthesizer/externals/l
 const workerjs = libfluidsynth + fs.readFileSync('./src/FluidSynthWorker.js', 'utf8');
 const workerUrl = `data:text/javascript;base64,${btoa(workerjs)}`;
 const webworker = new Worker(workerUrl);
-
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
@@ -51,6 +50,8 @@ function downloadLastSoundFont() {
 
 
 export class WerckmeisterMidiPlayer {
+    private static instaces = 0;
+    private instanceId: number;
     private _playerState: PlayerState = PlayerState.Stopped;
     playedTime: number = 0;
     midifile: any;
@@ -68,6 +69,9 @@ export class WerckmeisterMidiPlayer {
     private audioNodes = new Map<number, AudioBufferSourceNode>();
     private playblackNode: AudioBufferSourceNode;
     public rendererBlockSize = 44100*10;
+    constructor() {
+        this.instanceId = ++WerckmeisterMidiPlayer.instaces;
+    }
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
@@ -245,11 +249,15 @@ export class WerckmeisterMidiPlayer {
         this.playerState = PlayerState.Playing;
         
         const sampleRate = this.audioContext.sampleRate;
-        console.log("start rendering");
         this.playerState = PlayerState.Playing;
         this.startPlayback().then(() => {
             this.playerState = PlayerState.Stopped;
         });
+    }
+
+    private postWebworker(data: any) {
+        data.sessionId = this.instanceId;
+        webworker.postMessage(data);
     }
 
     private async startPlayback() {
@@ -271,11 +279,15 @@ export class WerckmeisterMidiPlayer {
                 }
             }
             const stop = () => {
+                this.postWebworker({stop:true});
                 webworker.removeEventListener('message', onWorkerResponse);
                 this.audioNodes.clear();
                 resolve();
             }
             const onWorkerResponse = (msg) => {
+                if (msg.data.sessionId !== this.instanceId) {
+                    return;
+                }
                 if (this.playerState !== PlayerState.Playing) {
                     stop();
                     return;                    
@@ -296,7 +308,7 @@ export class WerckmeisterMidiPlayer {
                 playNextBlock(audioBuffer, msg.data.lastBlock);
             };
             webworker.addEventListener('message', onWorkerResponse);
-            webworker.postMessage({
+            this.postWebworker({
                 soundFont: sfData,
                 midiBuffer: this.midiBuffer,
                 audioBufferLength: songTimeSecs * sampleRate,
