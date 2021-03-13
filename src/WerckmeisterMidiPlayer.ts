@@ -19,7 +19,7 @@ const webworker = new Worker(workerUrl);
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
 const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.1/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
-
+const DefaultRendererBufferSeconds = 10;
 export enum PlayerState {
     Stopped,
     Preparing,
@@ -68,7 +68,7 @@ export class WerckmeisterMidiPlayer {
     private repoUrl = DefaultRepoUrl;
     private audioNodes = new Map<number, AudioBufferSourceNode>();
     private playblackNode: AudioBufferSourceNode;
-    public rendererBlockSize = 44100*10;
+    public rendererBufferSeconds = DefaultRendererBufferSeconds;
     constructor() {
         this.instanceId = ++WerckmeisterMidiPlayer.instaces;
     }
@@ -312,7 +312,7 @@ export class WerckmeisterMidiPlayer {
                 soundFont: sfData,
                 midiBuffer: this.midiBuffer,
                 audioBufferLength: songTimeSecs * sampleRate,
-                blockSize: this.rendererBlockSize,
+                blockSize: sampleRate * this.rendererBufferSeconds,
                 sampleRate: this.audioContext.sampleRate
             });
         });
