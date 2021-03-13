@@ -7,11 +7,12 @@ import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
 import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
-
-
+declare const require;
 const fs = require('fs');
 // Read contents as a string
-const workerjs = fs.readFileSync('jssynthbuild/main.js', 'utf8');
+const libfluidsynth = fs.readFileSync('./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js', 'utf8') + '\n'
+    + fs.readFileSync('./node_modules/js-synthesizer/dist/js-synthesizer.js', 'utf8') + '\n';
+const workerjs = libfluidsynth + fs.readFileSync('./src/FluidSynthWorker.js', 'utf8');
 const workerUrl = `data:text/javascript;base64,${btoa(workerjs)}`;
 const webworker = new Worker(workerUrl);
 
