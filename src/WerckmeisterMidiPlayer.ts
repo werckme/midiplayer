@@ -10,10 +10,11 @@ import { SfRepository } from './SfRepository';
 declare const require;
 const fs = require('fs');
 // Read contents as a string
-const libfluidsynth = fs.readFileSync('./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js', 'utf8') + '\n'
-    + fs.readFileSync('./node_modules/js-synthesizer/dist/js-synthesizer.js', 'utf8') + '\n';
-const workerjs = libfluidsynth + fs.readFileSync('./src/FluidSynthWorker.js', 'utf8');
-const workerUrl = `data:text/javascript;base64,${btoa(workerjs)}`;
+const libfluidsynth = fs.readFileSync('./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js', 'utf8');
+const jsSynthesizer = fs.readFileSync('./node_modules/js-synthesizer/dist/js-synthesizer.js', 'utf8');
+const workerjs = fs.readFileSync('./src/FluidSynthWorker.js', 'utf8');
+const workerLibs = [libfluidsynth, jsSynthesizer, workerjs];
+const workerUrl = `data:text/javascript;base64,${btoa(workerLibs.join('\n'))}`;
 const webworker = new Worker(workerUrl);
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;

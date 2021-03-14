@@ -51,8 +51,10 @@ function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockS
 
 self.onmessage = function (msg) {
     if(msg.data.stop) {
-        console.log("Stop");
         session.running = false;
+        return;
+    }
+    if (session.running) {
         return;
     }
     const {soundFont, midiBuffer, audioBufferLength, blockSize, sampleRate, sessionId} = msg.data;
