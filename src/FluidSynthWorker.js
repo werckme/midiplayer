@@ -11,24 +11,32 @@ function getSynth() {
     return _synth;
 }
 
+const State = {
+    stopped: 0,
+    playing: 1,
+    stopping: 2
+}
+
 const session = {
-    running: false
+    state: State.stopped
 }
 
 function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockSize) {
-    session.running = true;
+    session.state = State.playing;
     session.sesisonId = sessionId;
     const synth = getSynth();
+    synth.resetPlayer();
     synth.loadSFont(soundFontBff).then(() => {
         synth.addSMFDataToPlayer(midiBuffer).then(() => {
             synth.playPlayer().then(()=> {
                 let samplesLeft = audioBufferLength;
                 function renderBlock() {
-                    console.log("renderBlock")
-                    if (samplesLeft <= 0 || session.running === false) {
-                        synth.resetPlayer();
+                    if (samplesLeft <= 0 || session.state !== State.playing) {
+                        session.state = State.stopped;
+                        self.postMessage({sessionId, stopped: true});
                         return;
                     }
+                    console.log("render block");
                     const blockSize = Math.min(inBlockSize, samplesLeft);
                     const audioBuffer = [
                         new Float32Array(blockSize),
@@ -50,11 +58,13 @@ function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockS
 }
 
 self.onmessage = function (msg) {
-    if(msg.data.stop) {
-        session.running = false;
+    if(msg.data.stop && session.state === State.playing) {
+        console.log("!!!stopping");
+        session.state = State.stopping;
         return;
     }
-    if (session.running) {
+    if (session.state !== State.stopped) {
+        console.log("not yet ready");
         return;
     }
     const {soundFont, midiBuffer, audioBufferLength, blockSize, sampleRate, sessionId} = msg.data;

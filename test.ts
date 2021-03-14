@@ -34,6 +34,7 @@ werckmeisterMidiPlayer.onPlayerStateChanged = (oldState: PlayerState, newState: 
         log(`Render Time: ${(performance.now() - startPreparingTime) / 1000}`);
     }
     log(PlayerState[newState]);
+    console.log(PlayerState[oldState], PlayerState[newState])
 };
 
 

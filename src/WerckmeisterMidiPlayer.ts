@@ -25,6 +25,7 @@ export enum PlayerState {
     Stopped,
     Preparing,
     Playing,
+    Stopping
 }
 
 const DefaultInstrument:IInstrument = {bank: 0, preset: 0};
@@ -246,14 +247,24 @@ export class WerckmeisterMidiPlayer {
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-        
-        this.playerState = PlayerState.Playing;
-        
-        const sampleRate = this.audioContext.sampleRate;
-        this.playerState = PlayerState.Playing;
+        const sampleRate = this.audioContext.sampleRate;        
         this.startPlayback().then(() => {
             this.playerState = PlayerState.Stopped;
         });
+    }
+    
+    public stop() {
+        if (!this.midifile || this.playerState === PlayerState.Stopped || this.playerState === PlayerState.Stopping) {
+            return;
+        }
+        this.playerState = PlayerState.Stopping;
+        const nodeKeys = Array.from(this.audioNodes.keys());
+        for(const nodeKey of nodeKeys) {
+            const node = this.audioNodes.get(nodeKey);
+            node.stop();
+            node.disconnect(this.audioContext.destination);
+            this.audioNodes.delete(nodeKey);
+        }
     }
 
     private postWebworker(data: any) {
@@ -265,12 +276,13 @@ export class WerckmeisterMidiPlayer {
         return new Promise<void>(async resolve => {
             const sfData = await this.soundFont.data.arrayBuffer();
             const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-            let startTime = -1;
+            let startTime = undefined;
             const sampleRate = this.audioContext.sampleRate;
             let firstResponse = true;
             let nodeId = 0;
             this.audioNodes = new Map<number, AudioBufferSourceNode>();
             const playNextBlock = (audioBlock: AudioBuffer, lastBlock: boolean) => {
+                this.playerState = PlayerState.Playing;
                 const node = new AudioBufferSourceNode(this.audioContext, {buffer: audioBlock});
                 this.audioNodes.set(nodeId++, node);
                 node.connect(this.audioContext.destination);
@@ -281,22 +293,29 @@ export class WerckmeisterMidiPlayer {
             }
             const stop = () => {
                 this.postWebworker({stop:true});
-                webworker.removeEventListener('message', onWorkerResponse);
-                this.audioNodes.clear();
-                resolve();
             }
             const onWorkerResponse = (msg) => {
                 if (msg.data.sessionId !== this.instanceId) {
                     return;
                 }
-                if (this.playerState !== PlayerState.Playing) {
-                    stop();
-                    return;                    
+                if (msg.data.stopped) {
+                    webworker.removeEventListener('message', onWorkerResponse);
+                    this.audioNodes.clear();
+                    resolve();
+                    return;
                 }
-                if (startTime < 0) {
+                if (startTime === undefined) {
+                    this.playerState = PlayerState.Playing;
                     startTime = this.audioContext.currentTime;
                     this.startEventNotification();
                 }
+                if (this.playerState === PlayerState.Stopping) {
+                    stop();
+                    return;
+                }
+                if (this.playerState !== PlayerState.Playing) {
+                    return;                    
+                }                
                 const bffL: ArrayBuffer = msg.data.bffL;
                 const bffR: ArrayBuffer = msg.data.bffR;
                 const startPosSamples = msg.data.samplePos;
@@ -314,7 +333,8 @@ export class WerckmeisterMidiPlayer {
                 midiBuffer: this.midiBuffer,
                 audioBufferLength: songTimeSecs * sampleRate,
                 blockSize: sampleRate * this.rendererBufferSeconds,
-                sampleRate: this.audioContext.sampleRate
+                sampleRate: this.audioContext.sampleRate,
+                sessionId: this.instanceId
             });
         });
     }
@@ -352,17 +372,4 @@ export class WerckmeisterMidiPlayer {
         }, EventEmitterRefreshRateMillis);
     }
 
-    public stop() {
-        if (!this.midifile || this.playerState === PlayerState.Stopped) {
-            return;
-        }
-        const nodeKeys = Array.from(this.audioNodes.keys());
-        for(const nodeKey of nodeKeys) {
-            const node = this.audioNodes.get(nodeKey);
-            node.stop();
-            node.disconnect(this.audioContext.destination);
-            this.audioNodes.delete(nodeKey);
-        }
-        this.playerState = PlayerState.Stopped;
-    }
 }
