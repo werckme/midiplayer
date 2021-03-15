@@ -273,35 +273,44 @@ export class WerckmeisterMidiPlayer {
     }
 
     private async startPlayback() {
+        let setWorkerDone: () => void = null;
+        const workerIsDone = new Promise<void>(resolve => {
+            setWorkerDone = resolve;
+        });
         return new Promise<void>(async resolve => {
             const sfData = await this.soundFont.data.arrayBuffer();
             const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
             let startTime = undefined;
             const sampleRate = this.audioContext.sampleRate;
-            let firstResponse = true;
             let nodeId = 0;
             this.audioNodes = new Map<number, AudioBufferSourceNode>();
             const playNextBlock = (audioBlock: AudioBuffer, lastBlock: boolean) => {
-                this.playerState = PlayerState.Playing;
                 const node = new AudioBufferSourceNode(this.audioContext, {buffer: audioBlock});
                 this.audioNodes.set(nodeId++, node);
                 node.connect(this.audioContext.destination);
-                node.start();
                 if (lastBlock) {
-                    node.onended = stop.bind(this);
+                    node.onended = async () => {
+                        await workerIsDone;
+                        resolve();
+                    };
                 }
+                node.start();
             }
-            const stop = () => {
+            const stopWorker = async () => {
                 this.postWebworker({stop:true});
+                await workerIsDone;
+                resolve();
             }
             const onWorkerResponse = (msg) => {
+                if (msg.data.sessionId === undefined) {
+                    console.error("session id expected");
+                }
                 if (msg.data.sessionId !== this.instanceId) {
                     return;
                 }
-                if (msg.data.stopped) {
+                if (msg.data.done) {
                     webworker.removeEventListener('message', onWorkerResponse);
-                    this.audioNodes.clear();
-                    resolve();
+                    setWorkerDone();
                     return;
                 }
                 if (startTime === undefined) {
@@ -310,7 +319,7 @@ export class WerckmeisterMidiPlayer {
                     this.startEventNotification();
                 }
                 if (this.playerState === PlayerState.Stopping) {
-                    stop();
+                    stopWorker();
                     return;
                 }
                 if (this.playerState !== PlayerState.Playing) {
