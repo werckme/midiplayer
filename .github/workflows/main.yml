@@ -6,7 +6,6 @@ on:
       - main
       - feature/* 
       - features/*
-      - features/fluidsynth-rendered
       - develop
   pull_request:
     branches: [ main ]
