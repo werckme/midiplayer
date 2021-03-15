@@ -5,7 +5,8 @@ on:
     branches:
       - main
       - feature/* 
-      - features/* 
+      - features/*
+      - features/fluidsynth-rendered
       - develop
   pull_request:
     branches: [ main ]
