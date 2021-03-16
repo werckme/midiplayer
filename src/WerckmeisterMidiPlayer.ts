@@ -20,11 +20,7 @@ const webworker = new Worker(workerUrl);
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
 const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.1/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
-<<<<<<< HEAD
 const DefaultRendererBufferSeconds = 10;
-=======
-
->>>>>>> features/fluidsynth
 export enum PlayerState {
     Stopped,
     Preparing,
@@ -248,7 +244,6 @@ export class WerckmeisterMidiPlayer {
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-<<<<<<< HEAD
         const sampleRate = this.audioContext.sampleRate;        
         this.startPlayback().then(() => {
             this.playerState = PlayerState.Stopped;
@@ -267,21 +262,6 @@ export class WerckmeisterMidiPlayer {
             node.disconnect(this.audioContext.destination);
             this.audioNodes.delete(nodeKey);
         }
-=======
-        this.playerState = PlayerState.Playing;
-        const context = this.audioContext;
-        await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/libfluidsynth-2.0.2.js');
-        await context.audioWorklet.addModule('https://unpkg.com/@werckmeister/components@1.1.10-dev-26/js-synthesizer.worklet.js');
-        this.synth = new JSSynth.AudioWorkletNodeSynthesizer();
-        this.synth.init(context.sampleRate);
-        const audioNode = this.synth.createAudioNode(context, 8192);
-        audioNode.connect(context.destination);
-        await this.synth.loadSFont(await this.soundFont.data.arrayBuffer());
-        await this.synth.addSMFDataToPlayer(this.midiBuffer);   
-        await this.synth.playPlayer();
-        this.startEventNotification();
-        this.waitUntilStopped(audioNode);
->>>>>>> features/fluidsynth
     }
 
     private postWebworker(data: any) {
