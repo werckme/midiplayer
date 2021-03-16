@@ -40,11 +40,17 @@ werckmeisterMidiPlayer.onPlayerStateChanged = (oldState: PlayerState, newState: 
 
 los.onclick = (ev: Event) => {
     log("play pressed")
+<<<<<<< HEAD
     setTimeout(async () => {
         werckmeisterMidiPlayer.initAudioEnvironment(ev);
         await werckmeisterMidiPlayer.load(ipanema);
         werckmeisterMidiPlayer.play();
     });
+=======
+    werckmeisterMidiPlayer.initAudioEnvironment(ev);
+    await werckmeisterMidiPlayer.load(ipanema);
+    werckmeisterMidiPlayer.play();
+>>>>>>> features/fluidsynth
 }
 
 halt.onclick = async (ev: Event) => {
