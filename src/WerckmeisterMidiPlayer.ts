@@ -1,38 +1,88 @@
 import * as _ from 'lodash';
-import { Instrument, SupportedSampleRate } from "./Instrument";
 import { IMidiEvent, MidiEventTypes } from "./IMidiEvent";
-import { DefaultInstrument, GetInstrumentNameForPc } from "./GM";
 import * as MidiFileModule from "midifile";
 const MidiFile = (MidiFileModule as any).default;
 import * as MidiEvents from "midievents";
 import { Base64Binary } from "./Base64binary";
 import { Constants } from './Constants';
-
-const percussionInstrumentName = "percussion";
+import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
+import { SfRepository } from './SfRepository';
+declare const require;
+const fs = require('fs');
+// Read contents as a string
+const libfluidsynth = fs.readFileSync('./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js', 'utf8');
+const jsSynthesizer = fs.readFileSync('./node_modules/js-synthesizer/dist/js-synthesizer.js', 'utf8');
+const workerjs = fs.readFileSync('./src/FluidSynthWorker.js', 'utf8');
+const workerLibs = [libfluidsynth, jsSynthesizer, workerjs];
+const workerUrl = `data:text/javascript;base64,${btoa(workerLibs.join('\n'))}`;
+const webworker = new Worker(workerUrl);
+// https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
-
+const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.1/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
+const DefaultRendererBufferSeconds = 10;
 export enum PlayerState {
     Stopped,
     Preparing,
     Playing,
+    Stopping
 }
 
+const DefaultInstrument:IInstrument = {bank: 0, preset: 0};
+
+let _lastSoundFont: ISoundFont;
+
+function downloadLastSoundFont() {
+    if (!_lastSoundFont) {
+        console.warn("wm midi no last soundfont");
+        return;
+    }
+    const soundFont = _lastSoundFont;
+    const url = window.URL.createObjectURL(soundFont.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = soundFont.sfName + ".sf2";
+    document.body.appendChild(a);
+    a.click();    
+    a.remove(); 
+}
+
+(window as any).__wmmididownloadlastsoundfont = downloadLastSoundFont;
+
+
 export class WerckmeisterMidiPlayer {
+    private static instaces = 0;
+    private instanceId: number;
     private _playerState: PlayerState = PlayerState.Stopped;
     playedTime: number = 0;
     midifile: any;
     private audioContext: AudioContext;
-    private instruments = new Map<number, Instrument>();
-    private percussion: Instrument|null;
     private events: IMidiEvent[];
-    private audioBuffer: AudioBuffer;
+    public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = () => { };
+    public onMidiEvent: (event: IMidiEvent) => void = () => { };
+    private sfComposer = new SfCompose();
+    private _sfRepository = null;
+    private neededInstruments: IInstrument[];
+    private midiBuffer: Uint8Array;
+    public soundFont: ISoundFont;
+    private soundFontHash: string;
+    private repoUrl = DefaultRepoUrl;
+    private audioNodes = new Map<number, AudioBufferSourceNode>();
     private playblackNode: AudioBufferSourceNode;
-    public onPlayerStateChanged: (oldState: PlayerState, newState: PlayerState) => void = ()=>{};
-    public onMidiEvent: (event: IMidiEvent) => void = ()=>{};
-    
+    public rendererBufferSeconds = DefaultRendererBufferSeconds;
+    constructor() {
+        this.instanceId = ++WerckmeisterMidiPlayer.instaces;
+    }
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
+    }
+
+    private async getSfRepository() {
+        if (!this._sfRepository) {
+            this._sfRepository = new SfRepository();
+            await this._sfRepository.setRepo(this.repoUrl);
+        }
+        return this._sfRepository;
     }
 
     public get playerState(): PlayerState {
@@ -48,10 +98,9 @@ export class WerckmeisterMidiPlayer {
     }
 
     public initAudioEnvironment(event: Event) {
-        if (this.audioContext) {
-            return;
+        if (!this.audioContext) {
+            this.audioContext = new AudioContext();
         }
-        this.audioContext = new AudioContext({sampleRate: SupportedSampleRate});
     }
 
     private convertEvent(event: any): IMidiEvent | null {
@@ -71,7 +120,7 @@ export class WerckmeisterMidiPlayer {
             param2: x.param2,
             absPositionTicks: x.absPositionTicks,
             playTime: x.playTime
-        });        
+        });
         const noteon = (x) => ({
             type: MidiEventTypes.NoteOn,
             noteName: Constants.NOTES[x.param1],
@@ -99,11 +148,11 @@ export class WerckmeisterMidiPlayer {
             param1: x.param1,
             param2: x.param2,
             absPositionTicks: x.absPositionTicks,
-            pitchbendValue: x.param2*128 + x.param1,
+            pitchbendValue: x.param2 * 128 + x.param1,
             playTime: x.playTime
-        });        
+        });
         if (event.type === MidiEvents.EVENT_MIDI) {
-            switch(event.subtype) {
+            switch (event.subtype) {
                 case MidiEvents.EVENT_MIDI_PROGRAM_CHANGE: return pc(event);
                 case MidiEvents.EVENT_MIDI_CONTROLLER: return cc(event);
                 case MidiEvents.EVENT_MIDI_NOTE_ON: return noteon(event);
@@ -115,105 +164,78 @@ export class WerckmeisterMidiPlayer {
     }
 
     private async preprocessEvents(events) {
-        const absolutePositions:number[] = [];
+        const absolutePositions: number[] = [];
         const addAbsolutePosition = (x: any) => {
             const trackId = x.track || 0;
             let pos = absolutePositions[trackId] || 0;
             // for some reason the delta value in x is not correct, so we fetch it via getTrackEvents()
-            const trackEvents:any[] = this.midifile.getTrackEvents(trackId);
+            const trackEvents: any[] = this.midifile.getTrackEvents(trackId);
             const delta = (trackEvents.find(tev => tev.index === x.index)).delta || 0;
             x.absPositionTicks = pos + delta;
             absolutePositions[trackId] = x.absPositionTicks;
             return x;
         };
-        let neededInstruments = _.chain(events)
+        this.neededInstruments = _.chain(events)
             .filter(x => x.type === MidiEvents.EVENT_MIDI && x.subtype === MidiEvents.EVENT_MIDI_PROGRAM_CHANGE)
-            .map(x => GetInstrumentNameForPc(x.param1))
-            .uniq()
+            .map(x => { 
+                let bank = 0;
+                if (x.channel === percussionMidiChannel) {
+                    bank = 128;
+                }
+                return {bank, preset: x.param1 as number} 
+            })
             .filter(x => !!x)
+            .uniqBy(x => `${x.bank}-${x.preset}`)
             .value();
-        neededInstruments.push(DefaultInstrument);
-        const needsPercussion = _.chain(events)
-            .some(x => x.channel === percussionMidiChannel)
-            .value();
-        if (needsPercussion) {
-            neededInstruments.push(percussionInstrumentName);
-            this.percussion = new Instrument(this.audioContext);
-            this.percussion.setInstrument(percussionInstrumentName);
+        
+        if (this.neededInstruments.length === 0) {
+            this.neededInstruments.push(DefaultInstrument);
         }
-        for(const instrumentName of neededInstruments) {
-            await Instrument.loadSamples(instrumentName, this.audioContext);
-        }
+
         this.events = _.chain(events)
             .map(x => this.convertEvent(addAbsolutePosition(x)))
             .filter(x => !!x)
             .value();
     }
 
-    private getInstrument(event: IMidiEvent) {
-        if (event.channel === percussionMidiChannel) {
-            return this.percussion;
-        }
-        if (!this.instruments.has(event.track)) {
-            const newInstrument = new Instrument(this.audioContext);
-            this.instruments.set(event.track, newInstrument);
-        }
-        return this.instruments.get(event.track);
+    private instrumentHash(instrument: IInstrument): string {
+        return `${instrument.bank}-${instrument.preset}`;
     }
 
-    private noteOn(event: IMidiEvent, offset: number) {
-        const instrument = this.getInstrument(event);
-        instrument.noteOn(event, offset);
+    private instrumentsHash(instruments: IInstrument[]): string {
+        return instruments
+            .map(i => this.instrumentHash(i))
+            .sort()
+            .join(",");
     }
 
-    private noteOff(event: IMidiEvent, offset: number) {
-        const instrument = this.getInstrument(event);
-        instrument.noteOff(this.audioBuffer, event, offset);
-    }
+    private async getSoundfont(requiredInstruments: IInstrument[]): Promise<ISoundFont> {
+        const sfRepository = await this.getSfRepository();
+        const skeleton = await sfRepository.getSkeleton();
+        const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, requiredInstruments);
+        const samples = await sfRepository.getSampleFiles(requiredSampleIds);
+        await this.sfComposer.writeSamples(samples);
+        const sf = await this.sfComposer.compose(skeleton.sfName, requiredInstruments);
+        return sf;
 
-    private controllerChange(event: IMidiEvent) {
-        const instrument = this.getInstrument(event);
-        instrument.controllerChange(event);
-    }
-
-    private programChange(event: IMidiEvent) {
-        if (event.channel === percussionMidiChannel) {
-            return;
-        }
-        const instrumentName = GetInstrumentNameForPc(event.param1);
-        const instrument = this.getInstrument(event);
-        instrument.setInstrument(instrumentName);
-    }
-
-    private pitchBend(event: IMidiEvent) {
-        const instrument = this.getInstrument(event);
-        instrument.pitchBend(event);
     }
 
     public async load(base64Data: string) {
-        const bff = Base64Binary.decodeArrayBuffer(base64Data);
-        this.midifile = new MidiFile(bff);
+        this.midiBuffer = Base64Binary.decodeArrayBuffer(base64Data);
+        this.midifile = new MidiFile(this.midiBuffer);
         await this.preprocessEvents(this.midifile.getEvents());
+        const soundFontHash = this.instrumentsHash(this.neededInstruments);
+        if (soundFontHash === this.soundFontHash) {
+            return;
+        }
+        this.soundFont = await this.getSoundfont(this.neededInstruments);
+        
+        _lastSoundFont = this.soundFont;
+        this.soundFontHash = soundFontHash;
     }
 
-    private async render() {
-        return new Promise<void>(resolve => {
-            setTimeout(() => {
-                for(let i=0; i<this.events.length; ++i) {
-                    const event = this.events[i];
-                    let eventTseconds = event.playTime / 1000;
-                    switch(event.type) {
-                        case MidiEventTypes.NoteOn: this.noteOn(event, eventTseconds); break;
-                        case MidiEventTypes.NoteOff: this.noteOff(event, eventTseconds); break;
-                        case MidiEventTypes.Pc: this.programChange(event); break;
-                        case MidiEventTypes.Cc: this.controllerChange(event); break;
-                        case MidiEventTypes.PitchBend: this.pitchBend(event); break;
-                        //default: console.log(event.name); break;
-                    }
-                }
-                resolve();
-            });
-        });
+    private sleepAsync(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     public async play() {
@@ -222,19 +244,110 @@ export class WerckmeisterMidiPlayer {
         }
         this.playedTime = 0;
         this.playerState = PlayerState.Preparing;
-        try {
-            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
-            this.audioBuffer = new AudioBuffer({length: songTimeSecs*SupportedSampleRate, sampleRate: SupportedSampleRate, numberOfChannels: 2})
-            await this.render();
-            this.playblackNode = new AudioBufferSourceNode(this.audioContext, {buffer: this.audioBuffer});
-            this.playblackNode.connect(this.audioContext.destination);
-            this.playblackNode.start();
-            this.playblackNode.onended = this.stop.bind(this);
-            this.playerState = PlayerState.Playing;
-            this.startEventNotification();
-        } catch {
+        const sampleRate = this.audioContext.sampleRate;        
+        this.startPlayback().then(() => {
             this.playerState = PlayerState.Stopped;
+        });
+    }
+    
+    public stop() {
+        if (!this.midifile || this.playerState === PlayerState.Stopped || this.playerState === PlayerState.Stopping) {
+            return;
         }
+        this.playerState = PlayerState.Stopping;
+        const nodeKeys = Array.from(this.audioNodes.keys());
+        for(const nodeKey of nodeKeys) {
+            const node = this.audioNodes.get(nodeKey);
+            node.stop();
+            node.disconnect(this.audioContext.destination);
+            this.audioNodes.delete(nodeKey);
+        }
+    }
+
+    private postWebworker(data: any) {
+        data.sessionId = this.instanceId;
+        webworker.postMessage(data);
+    }
+
+    private async startPlayback() {
+        let setWorkerDone: () => void = null;
+        const workerIsDone = new Promise<void>(resolve => {
+            setWorkerDone = resolve;
+        });
+        return new Promise<void>(async resolve => {
+            const sfData = await this.soundFont.data.arrayBuffer();
+            const songTimeSecs = _.last(this.events).playTime/1000 + 1.5;
+            let startTime = undefined;
+            const sampleRate = this.audioContext.sampleRate;
+            let nodeId = 0;
+            this.audioNodes = new Map<number, AudioBufferSourceNode>();
+            const playNextBlock = (audioBlock: AudioBuffer, lastBlock: boolean) => {
+                const node = new AudioBufferSourceNode(this.audioContext, {buffer: audioBlock});
+                this.audioNodes.set(nodeId++, node);
+                node.connect(this.audioContext.destination);
+                if (lastBlock) {
+                    node.onended = async () => {
+                        await workerIsDone;
+                        resolve();
+                    };
+                }
+                node.start();
+            }
+            const stopWorker = async () => {
+                this.postWebworker({stop:true});
+                await workerIsDone;
+                resolve();
+            }
+            const onWorkerResponse = (msg) => {
+                if (msg.data.sessionId === undefined) {
+                    console.error("session id expected");
+                }
+                if (msg.data.sessionId !== this.instanceId) {
+                    return;
+                }
+                if (msg.data.done) {
+                    webworker.removeEventListener('message', onWorkerResponse);
+                    setWorkerDone();
+                    return;
+                }
+                if (startTime === undefined) {
+                    this.playerState = PlayerState.Playing;
+                    startTime = this.audioContext.currentTime;
+                    this.startEventNotification();
+                }
+                if (this.playerState === PlayerState.Stopping) {
+                    stopWorker();
+                    return;
+                }
+                if (this.playerState !== PlayerState.Playing) {
+                    return;                    
+                }                
+                const bffL: ArrayBuffer = msg.data.bffL;
+                const bffR: ArrayBuffer = msg.data.bffR;
+                const startPosSamples = msg.data.samplePos;
+                const playedSeconds = this.audioContext.currentTime - startTime;
+                const playedSamples = this.audioContext.sampleRate * playedSeconds;
+                const sampleOffset =  Math.floor(startPosSamples - playedSamples);
+                const audioBuffer = new AudioBuffer({length: msg.data.blockSize + sampleOffset, sampleRate: sampleRate, numberOfChannels: 2});
+                audioBuffer.copyToChannel(new Float32Array(msg.data.bffL), 0, sampleOffset);
+                audioBuffer.copyToChannel(new Float32Array(msg.data.bffR), 1, sampleOffset);
+                playNextBlock(audioBuffer, msg.data.lastBlock);
+            };
+            webworker.addEventListener('message', onWorkerResponse);
+            this.postWebworker({
+                soundFont: sfData,
+                midiBuffer: this.midiBuffer,
+                audioBufferLength: songTimeSecs * sampleRate,
+                blockSize: sampleRate * this.rendererBufferSeconds,
+                sampleRate: this.audioContext.sampleRate,
+                sessionId: this.instanceId
+            });
+        });
+    }
+    
+    public setRepoUrl(url: string) {
+        this.repoUrl = url;
+        this._sfRepository = null;
     }
 
     /**
@@ -249,7 +362,7 @@ export class WerckmeisterMidiPlayer {
             if (this.playerState !== PlayerState.Playing) {
                 clearInterval(intervalId);
             }
-            while(true) {
+            while (true) {
                 const event = this.events[eventIndex];
                 if (event.playTime > t) {
                     break;
@@ -263,14 +376,6 @@ export class WerckmeisterMidiPlayer {
             }
 
         }, EventEmitterRefreshRateMillis);
-    }
-
-    public stop() {
-        if (!this.midifile || this.playerState === PlayerState.Stopped) {
-            return;
-        }
-        this.playblackNode.stop();
-        this.playerState = PlayerState.Stopped;
     }
 
 }
