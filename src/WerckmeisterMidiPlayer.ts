@@ -70,6 +70,7 @@ export class WerckmeisterMidiPlayer {
     private audioNodes = new Map<number, AudioBufferSourceNode>();
     private playblackNode: AudioBufferSourceNode;
     public rendererBufferSeconds = DefaultRendererBufferSeconds;
+    public gain: number = 1.25;
     constructor() {
         this.instanceId = ++WerckmeisterMidiPlayer.instaces;
     }
@@ -340,7 +341,8 @@ export class WerckmeisterMidiPlayer {
                 audioBufferLength: songTimeSecs * sampleRate,
                 blockSize: sampleRate * this.rendererBufferSeconds,
                 sampleRate: this.audioContext.sampleRate,
-                sessionId: this.instanceId
+                sessionId: this.instanceId,
+                gain: this.gain
             });
         });
     }

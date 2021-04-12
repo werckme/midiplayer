@@ -42,7 +42,7 @@ los.onclick = (ev: Event) => {
     log("play pressed")
     setTimeout(async () => {
         werckmeisterMidiPlayer.initAudioEnvironment(ev);
-        await werckmeisterMidiPlayer.load(ipanema);
+        await werckmeisterMidiPlayer.load(blackpages);
         werckmeisterMidiPlayer.play();
     });
 }

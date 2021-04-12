@@ -16,10 +16,13 @@ const session = {
     state: State.stopped
 }
 
-function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockSize) {
+function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockSize, gain) {
     session.state = State.playing;
     session.sesisonId = sessionId;
     const synth = getSynth();
+    if (!!gain) {
+        synth.setGain(gain);
+    }
     synth.loadSFont(soundFontBff).then(() => {
         synth.addSMFDataToPlayer(midiBuffer).then(() => {
             synth.playPlayer().then(()=> {
@@ -58,8 +61,8 @@ self.onmessage = function (msg) {
     if (session.state !== State.stopped) {
         return;
     }
-    const {soundFont, midiBuffer, audioBufferLength, blockSize, sampleRate, sessionId} = msg.data;
+    const {soundFont, midiBuffer, audioBufferLength, blockSize, sampleRate, sessionId, gain} = msg.data;
     _sampleRate = sampleRate;
-    render(sessionId, soundFont, midiBuffer, audioBufferLength, blockSize);
+    render(sessionId, soundFont, midiBuffer, audioBufferLength, blockSize, gain);
 }
 
