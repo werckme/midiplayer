@@ -31,6 +31,7 @@ function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockS
                     if (samplesLeft <= 0 || session.state !== State.playing) {
                         session.state = State.stopped;
                         self.postMessage({sessionId, done: true});
+                        synth.close();
                         return;
                     }
                     const blockSize = Math.min(inBlockSize, samplesLeft);
