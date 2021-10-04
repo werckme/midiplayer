@@ -7,6 +7,8 @@ interface IRepoMetaData {
     sfName: string;
 };
 
+export type SampleLoadingEvent = (id: number, url: string) => void;
+
 export class SfRepository {
     private _repoMetaData = null;
     private skeletonFile: ISkeletonFile;
@@ -43,10 +45,12 @@ export class SfRepository {
         return this.skeletonFile;
     }
 
-    public async getSampleFiles(sampleIds: number[]): Promise<ISampleFile[]> {
+    public async getSampleFiles(sampleIds: number[], onDowloaded:SampleLoadingEvent = ()=>{}, onDowloading:SampleLoadingEvent = ()=>{}): Promise<ISampleFile[]> {
         const _fetch = async (id, url) => {
+            onDowloading(id, url);
             const response = await fetch(url);
             const blob = await response.blob();
+            onDowloaded(id, url);
             return {id, blob};
         }
         const fetches: Promise<{id: number, blob: Blob}>[] = [];

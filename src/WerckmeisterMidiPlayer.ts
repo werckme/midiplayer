@@ -49,6 +49,15 @@ function downloadLastSoundFont() {
 
 (window as any).__wmmididownloadlastsoundfont = downloadLastSoundFont;
 
+export interface Task {
+    id: string;
+    name: string;
+}
+
+export interface TaskVisitor {
+    newTasks(tasks: Task[]);
+    done(task: Task);
+}
 
 export class WerckmeisterMidiPlayer {
     private static instaces = 0;
@@ -68,7 +77,6 @@ export class WerckmeisterMidiPlayer {
     private soundFontHash: string;
     private repoUrl = DefaultRepoUrl;
     private audioNodes = new Map<number, AudioBufferSourceNode>();
-    private playblackNode: AudioBufferSourceNode;
     public rendererBufferSeconds = DefaultRendererBufferSeconds;
     public gain: number = 1.25;
     constructor() {
@@ -78,7 +86,7 @@ export class WerckmeisterMidiPlayer {
         return this.midifile.header.getTicksPerBeat();
     }
 
-    private async getSfRepository() {
+    private async getSfRepository(): Promise<SfRepository> {
         if (!this._sfRepository) {
             this._sfRepository = new SfRepository();
             await this._sfRepository.setRepo(this.repoUrl);
@@ -214,15 +222,29 @@ export class WerckmeisterMidiPlayer {
         const sfRepository = await this.getSfRepository();
         const skeleton = await sfRepository.getSkeleton();
         const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, requiredInstruments);
-        const samples = await sfRepository.getSampleFiles(requiredSampleIds);
+        let onDownloadedHandler = (id: number, url: string)=> {};
+        if (this.currentTaskVisitor) {
+            const tasks = requiredSampleIds.map(id => ({name: `fetching sample ${id}`, id: `fetching-${id}`}));
+            this.currentTaskVisitor.newTasks(tasks);
+            onDownloadedHandler = (id: number, url: string) => {
+                const task = _.find(tasks, t => t.id === `fetching-${id}`);
+                if (task) {
+                    this.currentTaskVisitor.done(task);
+                }
+            };
+        }
+        const samples = await sfRepository.getSampleFiles(requiredSampleIds, onDownloadedHandler);
         await this.sfComposer.writeSamples(samples);
         const sf = await this.sfComposer.compose(skeleton.sfName, requiredInstruments);
         return sf;
 
     }
 
-    public async load(base64Data: string) {
-        this.midiBuffer = Base64Binary.decodeArrayBuffer(base64Data);
+    private currentTaskVisitor:TaskVisitor = undefined;
+
+    public async load(base64MidiFileData: string, taskVisitor: TaskVisitor|undefined = undefined) {
+        this.currentTaskVisitor = taskVisitor;
+        this.midiBuffer = Base64Binary.decodeArrayBuffer(base64MidiFileData);
         this.midifile = new MidiFile(this.midiBuffer);
         await this.preprocessEvents(this.midifile.getEvents());
         const soundFontHash = this.instrumentsHash(this.neededInstruments);
