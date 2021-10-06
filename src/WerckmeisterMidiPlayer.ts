@@ -19,7 +19,7 @@ const webworker = new Worker(workerUrl);
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
-const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.1/soundfonts/FluidR3_GM/FluidR3_GM.sf2.json";
+const DefaultRepoUrl = "https://raw.githubusercontent.com/werckme/soundfont-server/v1.2/soundfonts/FluidR3_GM_EX/FluidR3_GM_EX.sf2.json";
 const DefaultRendererBufferSeconds = 10;
 export enum PlayerState {
     Stopped,
