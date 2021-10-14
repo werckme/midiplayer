@@ -1,5 +1,3 @@
-const RendererIdleTimeMillis = 100;
-
 function getSynth() {
     const _synth = new JSSynth.Synthesizer();
     _synth.init(_sampleRate);
@@ -46,7 +44,7 @@ function render(sessionId, soundFontBff, midiBuffer, audioBufferLength, inBlockS
                     const lastBlock = (samplesLeft - blockSize) <= 0;
                     self.postMessage({bffL, bffR, blockSize, samplePos, lastBlock, sessionId}, [bffL, bffR]);
                     samplesLeft -= blockSize;
-                    setTimeout(renderBlock, RendererIdleTimeMillis); // aka. sleep
+                    setTimeout(renderBlock, 100); // aka. sleep
                 }
                 renderBlock();               
             });
