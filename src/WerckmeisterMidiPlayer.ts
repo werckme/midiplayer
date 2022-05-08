@@ -57,7 +57,7 @@ export interface Task {
 export interface TaskVisitor {
     newTasks(tasks: Task[]);
     done(task: Task);
-    message(text: string);
+    message?(text: string);
 }
 
 export class WerckmeisterMidiPlayer {
@@ -226,7 +226,7 @@ export class WerckmeisterMidiPlayer {
         const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, requiredInstruments);
         let onDownloadedHandler = (id: number, url: string)=> {};
         if (this.currentTaskVisitor) {
-            if(sfRepository.repoMetaData.license && !sfRepository.licenseMessageSent) {
+            if(sfRepository.repoMetaData.license && !sfRepository.licenseMessageSent && this.currentTaskVisitor.message) {
                 this.currentTaskVisitor.message(sfRepository.repoMetaData.license);
                 sfRepository.licenseMessageSent = true;
             }
