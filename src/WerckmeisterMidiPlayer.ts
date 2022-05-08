@@ -57,7 +57,7 @@ export interface Task {
 export interface TaskVisitor {
     newTasks(tasks: Task[]);
     done(task: Task);
-    message?(text: string);
+    message?(text: string, title?: string);
 }
 
 export class WerckmeisterMidiPlayer {
@@ -227,7 +227,7 @@ export class WerckmeisterMidiPlayer {
         let onDownloadedHandler = (id: number, url: string)=> {};
         if (this.currentTaskVisitor) {
             if(sfRepository.repoMetaData.license && !sfRepository.licenseMessageSent && this.currentTaskVisitor.message) {
-                this.currentTaskVisitor.message(sfRepository.repoMetaData.license);
+                this.currentTaskVisitor.message(`${sfRepository.repoMetaData.sfName} is licensed under ${sfRepository.repoMetaData.license}`, sfRepository.repoMetaData.sfName);
                 sfRepository.licenseMessageSent = true;
             }
             const tasks = requiredSampleIds.map(id => ({name: `fetching sample ${id}`, id: `fetching-${id}`}));
