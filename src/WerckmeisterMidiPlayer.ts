@@ -9,13 +9,13 @@ import { IInstrument, ISoundFont, SfCompose } from './SfCompose';
 import { SfRepository } from './SfRepository';
 declare const require;
 const fs = require('fs');
-// Read contents as a string
+// // Read contents as a string
 const libfluidsynth = fs.readFileSync('./node_modules/js-synthesizer/externals/libfluidsynth-2.0.2.js', 'utf8');
 const jsSynthesizer = fs.readFileSync('./node_modules/js-synthesizer/dist/js-synthesizer.js', 'utf8');
 const workerjs = fs.readFileSync('./src/FluidSynthWorker.js', 'utf8');
 const workerLibs = [libfluidsynth, jsSynthesizer, workerjs];
-const workerUrl = `data:text/javascript;base64,${btoa(workerLibs.join('\n'))}`;
-const webworker = new Worker(workerUrl);
+const blob = new Blob([workerLibs.join('\n')], {type: 'application/javascript'});
+const webworker = new Worker(URL.createObjectURL(blob));
 // https://github.com/jet2jet/js-synthesizer/blob/master/src/main/ISynthesizer.ts
 const percussionMidiChannel = 9;
 const EventEmitterRefreshRateMillis = 10;
@@ -106,9 +106,10 @@ export class WerckmeisterMidiPlayer {
         }
     }
 
-    public initAudioEnvironment(event: Event) {
+    public async initAudioEnvironment(event: Event) {
         if (!this.audioContext) {
-            this.audioContext = new AudioContext();
+            this.audioContext = new AudioContext({sampleRate: 44100});
+            await this.audioContext.resume();
         }
     }
 
@@ -274,12 +275,12 @@ export class WerckmeisterMidiPlayer {
         if (!this.midifile || this.playerState === PlayerState.Stopped || this.playerState === PlayerState.Stopping) {
             return;
         }
+        console.log("A")
         this.playerState = PlayerState.Stopping;
         const nodeKeys = Array.from(this.audioNodes.keys());
         for(const nodeKey of nodeKeys) {
             const node = this.audioNodes.get(nodeKey);
             node.stop();
-            node.disconnect(this.audioContext.destination);
             this.audioNodes.delete(nodeKey);
         }
     }
