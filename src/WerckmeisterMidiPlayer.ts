@@ -75,7 +75,7 @@ export class WerckmeisterMidiPlayer {
     private midiBuffer: Uint8Array;
     public soundFont: ISoundFont;
     private soundFontHash: string;
-    private repoUrl = DefaultRepoUrl;
+    public repoUrl = DefaultRepoUrl;
     private audioNodes = new Map<number, AudioBufferSourceNode>();
     public rendererBufferSeconds = DefaultRendererBufferSeconds;
     public gain: number = 1.25;
@@ -248,6 +248,7 @@ export class WerckmeisterMidiPlayer {
         this.midifile = new MidiFile(this.midiBuffer);
         await this.preprocessEvents(this.midifile.getEvents());
         const soundFontHash = this.instrumentsHash(this.neededInstruments);
+        console.log(this.soundFontHash);
         if (soundFontHash === this.soundFontHash) {
             return;
         }
@@ -255,10 +256,6 @@ export class WerckmeisterMidiPlayer {
         
         _lastSoundFont = this.soundFont;
         this.soundFontHash = soundFontHash;
-    }
-
-    private sleepAsync(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     public async play() {
@@ -372,6 +369,7 @@ export class WerckmeisterMidiPlayer {
     public setRepoUrl(url: string) {
         this.repoUrl = url;
         this._sfRepository = null;
+        this.soundFontHash = "";
     }
 
     /**

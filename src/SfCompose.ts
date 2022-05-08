@@ -100,7 +100,8 @@ export class SfCompose {
     private filterExistingSamples(module:SfComposeModule, skeleton: ISkeletonFile, sampleIds: number[]) {
         const sampleExists = (sampleid) => {
             const pathToSamples = skeleton.sfName;
-            const stat = module.FS.analyzePath(`${pathToSamples}/_${sampleid}.smpl`, true);
+            const samplePath = `${pathToSamples}/_${sampleid}.smpl`;
+            const stat = module.FS.analyzePath(samplePath, true);
             return stat.exists;
         }
         return sampleIds.filter(id => !sampleExists(id));

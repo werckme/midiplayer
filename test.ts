@@ -10,6 +10,9 @@ const werckmeisterMidiPlayer = new WerckmeisterMidiPlayer();
 const los = document.querySelector("button#los") as HTMLButtonElement;
 const halt = document.querySelector("button#halt") as HTMLButtonElement;
 const out = document.querySelector("#output") as HTMLElement;
+const repoInput = document.querySelector("input[type=text]") as HTMLInputElement;
+
+repoInput.value = werckmeisterMidiPlayer.repoUrl;
 
 function log(str:string) {
     out.innerHTML += `<li>${str}</li>`
@@ -50,6 +53,7 @@ los.onclick = (ev: Event) => {
     };
     setTimeout(async () => {
         werckmeisterMidiPlayer.initAudioEnvironment(ev);
+        werckmeisterMidiPlayer.setRepoUrl(repoInput.value);
         await werckmeisterMidiPlayer.load(blackpages, visitor);
         werckmeisterMidiPlayer.play();
     });
