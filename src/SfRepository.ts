@@ -5,15 +5,17 @@ interface IRepoMetaData {
     skeleton: string;
     sampleTemplate: string;
     sfName: string;
+    license?: string;
 };
 
 export type SampleLoadingEvent = (id: number, url: string) => void;
 
 export class SfRepository {
+    public licenseMessageSent: boolean;
     private _repoMetaData = null;
     private skeletonFile: ISkeletonFile;
 
-    private get repoMetaData(): IRepoMetaData {
+    public get repoMetaData(): IRepoMetaData {
         if (!this._repoMetaData) {
             throw new Error("missing repo meta data. Did you forgot to set the repo url?");
         }

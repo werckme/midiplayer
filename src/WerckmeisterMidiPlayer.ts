@@ -57,6 +57,7 @@ export interface Task {
 export interface TaskVisitor {
     newTasks(tasks: Task[]);
     done(task: Task);
+    message(text: string);
 }
 
 export class WerckmeisterMidiPlayer {
@@ -225,6 +226,10 @@ export class WerckmeisterMidiPlayer {
         const requiredSampleIds = await this.sfComposer.getRequiredSampleIds(skeleton, requiredInstruments);
         let onDownloadedHandler = (id: number, url: string)=> {};
         if (this.currentTaskVisitor) {
+            if(sfRepository.repoMetaData.license && !sfRepository.licenseMessageSent) {
+                this.currentTaskVisitor.message(sfRepository.repoMetaData.license);
+                sfRepository.licenseMessageSent = true;
+            }
             const tasks = requiredSampleIds.map(id => ({name: `fetching sample ${id}`, id: `fetching-${id}`}));
             this.currentTaskVisitor.newTasks(tasks);
             onDownloadedHandler = (id: number, url: string) => {
@@ -367,6 +372,9 @@ export class WerckmeisterMidiPlayer {
     }
     
     public setRepoUrl(url: string) {
+        if (url === this.repoUrl) {
+            return;
+        }
         this.repoUrl = url;
         this._sfRepository = null;
         this.soundFontHash = "";

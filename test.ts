@@ -49,6 +49,9 @@ los.onclick = (ev: Event) => {
         },
         done: (task) => {
             console.log('done', task)
+        },
+        message: (txt) => {
+            console.info(txt);
         }
     };
     setTimeout(async () => {
