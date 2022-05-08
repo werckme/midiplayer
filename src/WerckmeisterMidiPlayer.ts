@@ -249,7 +249,6 @@ export class WerckmeisterMidiPlayer {
         this.midifile = new MidiFile(this.midiBuffer);
         await this.preprocessEvents(this.midifile.getEvents());
         const soundFontHash = this.instrumentsHash(this.neededInstruments);
-        console.log(this.soundFontHash);
         if (soundFontHash === this.soundFontHash) {
             return;
         }
