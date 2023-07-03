@@ -86,7 +86,9 @@ export class WerckmeisterMidiPlayer {
     public get ppq(): number {
         return this.midifile.header.getTicksPerBeat();
     }
-
+    public hasEvents(): boolean {
+        return this.events.length > 0;
+    }
     private async getSfRepository(): Promise<SfRepository> {
         if (!this._sfRepository) {
             this._sfRepository = new SfRepository();
